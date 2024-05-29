@@ -1,7 +1,8 @@
 import jax
 import jax.numpy as jnp
 from car_dynamics.models_jax.utils import normalize_angle_tensor, fold_angle_tensor
-
+import numpy as np
+import torch
 
 #----------------- reward functions -----------------#
 
@@ -39,8 +40,9 @@ def reward_track_fn(goal_list: jnp.ndarray, defaul_speed: float):
 
 def rollout_fn_select(model_struct, model, dt, L, LR):
     
+    
     @jax.jit
-    def rollout_fn_dbm(obs_history, state, action, debug=False):
+    def rollout_fn_dbm(obs_history, state, action, params, debug=False):
         # import pdb; pdb.set_trace()
         assert state.shape[1] == 6
         assert action.shape[1] == 2
@@ -58,8 +60,41 @@ def rollout_fn_select(model_struct, model, dt, L, LR):
         # next_state = next_state[:, :4]
         return next_state, {}
 
+    @jax.jit
+    def forward(params, x):
+        # print(params)
+        (w1, b1), (w2, b2) = params
+        hidden = jnp.dot(x, w1) + b1
+        hidden = jax.nn.relu(hidden)
+        output = jnp.dot(hidden, w2) + b2
+        return output
+
+    @jax.jit
+    def rollout_fn_nn(obs_history, state, action, params, debug=False):
+        assert state.shape[1] == 6
+        assert action.shape[1] == 2
+        # print("Here?")
+        # print(obs_history.shape)
+        # _X = obs_history[1:, :, 3:].reshape(obs_history.shape[1], -1)
+        X = jnp.concatenate((state[:, 3:], action), axis=1)
+        # X = jnp.concatenate((_X, X_), axis=1)
+        next_state = jnp.array(state)
+        # print("What? ",params)
+        # print(X.shape)
+        gradX = forward(params, jnp.array(X))
+
+        next_state = next_state.at[:, 3].add(gradX[:, 0] * dt)
+        next_state = next_state.at[:, 4].add(gradX[:, 1] * dt)
+        next_state = next_state.at[:, 5].add(gradX[:, 2] * dt)
+        next_state = next_state.at[:, 2].add(state[:, 5] * dt)
+
+        next_state = next_state.at[:, 0].add(state[:, 3] * jnp.cos(state[:, 2]) * dt - state[:, 4] * jnp.sin(state[:, 2]) * dt)
+        next_state = next_state.at[:, 1].add(state[:, 3] * jnp.sin(state[:, 2]) * dt + state[:, 4] * jnp.cos(state[:, 2]) * dt)
+        return next_state, {}
+
     if model_struct == 'dbm':
         return rollout_fn_dbm
-   
+    elif model_struct == 'nn':
+        return rollout_fn_nn
     else:
         raise Exception(f"model_struct {model_struct} not supported!")

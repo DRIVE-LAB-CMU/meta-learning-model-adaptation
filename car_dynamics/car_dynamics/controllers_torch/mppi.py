@@ -1,5 +1,6 @@
 import torch
 from torch.distributions.multivariate_normal import MultivariateNormal
+from torch.distributions.uniform import Uniform
 import time
 from termcolor import colored
 from car_dynamics.controllers_torch import BaseController
@@ -29,6 +30,7 @@ class MPPIController(BaseController):
                 fix_history,
                 num_obs,
                 num_actions,
+                alpha,
     ):
         
         self.gamma_mean: float = gamma_mean
@@ -36,7 +38,7 @@ class MPPIController(BaseController):
         self.discount: float = discount
         self.sample_sigma: float = sample_sigma
         self.lam: float = lam
-        
+        self.alpha: float = alpha
         self.a_mean: torch.Tensor = a_mean # a should be normalized to [-1, 1] in dynamics
         self.a_cov: torch.Tensor = a_cov
         self.a_mean_init = a_mean[-1:]
@@ -72,11 +74,13 @@ class MPPIController(BaseController):
         self.state_init_buf = torch.ones((self.num_obs,), device=self.device)
         self.x_all = []
         self.y_all = []
-            
+        
     def _sample_actions(self, ):
         
         # st = time.time()
         action_dist = MultivariateNormal(loc=self.a_mean, covariance_matrix=self.a_cov)
+        # action_dist = MultivariateNormal(loc=self.a_mean*0, covariance_matrix=self.a_cov)
+        # action_dist = Uniform(self.a_mean*0-1., self.a_mean*0+1.)
         # print("torch sample time", time.time() - st)
         
         # st = time.time()
@@ -88,9 +92,9 @@ class MPPIController(BaseController):
             a_sampled[:, :, d] = torch.clip(a_sampled[:, :, d], self.a_min[d], self.a_max[d]) * self.a_mag[d] + self.a_shift[d]
         # import pdb; pdb.set_trace()
         # print("clip time", time.time() - st)
-        return a_sampled
+        return a_sampled.to(self.device)
         
-    def _get_rollout(self, state_init, actions, fix_history=False):
+    def _get_rollout(self, state_init, actions, fix_history=False, one_hot_delay=None, debug=False):
         
         # st = time.time()
         n_rollouts = actions.shape[0]
@@ -104,25 +108,28 @@ class MPPIController(BaseController):
         # print("rollout_fn_start", time.time() - st)
         
         # st = time.time()
+        total_var = 0.
         for step in range(actions.shape[1]):
             
             # st = time.time()
             a_rollout = actions[:, step]
             if (not fix_history) or (step == 0):
+                obs_history[:, :-1] = obs_history[:, 1:].clone()
                 obs_history[:, -1, :self.num_obs] = state[:, :self.num_obs].clone()
                 obs_history[:, -1, -self.num_actions:] = a_rollout.clone()
             # print(f"action shape, {a_rollout.shape}")
-            
             # print("part 1", time.time() - st)
             # st = time.time()
-            state, debug_info = self.rollout_fn(obs_history, state, a_rollout, self.debug)
+            if (step==4) and debug:
+                state, debug_info = self.rollout_fn(obs_history, state, a_rollout, True, one_hot_delay)
+            else :
+                state, debug_info = self.rollout_fn(obs_history, state, a_rollout, self.debug, one_hot_delay)
             # print("part 2", time.time() - st)
             # st = time.time()
             if self.debug:
                 self.x_all += debug_info['x'].tolist()
                 self.y_all += debug_info['y'].tolist()
-            if not fix_history:
-                obs_history[:, :-1] = obs_history[:, 1:].clone()
+            total_var += debug_info['var']
             state_list.append(state)
             # print("part 3", time.time() - st)
             # print("mppi inner loop", time.time() - st)
@@ -130,14 +137,14 @@ class MPPIController(BaseController):
             # reward_rollout += reward_fn(state, a_rollout) * (self.discount ** step)
         # print("rollout_fn_end", time.time() - st)
         
-        return state_list
+        return state_list, total_var
     
     def feed_hist(self, obs, action):
         state = torch.tensor(obs[:self.num_obs], device=self.device)
         action_tensor = torch.tensor(action[:self.num_actions], device=self.device)
+        self.state_hist[:-1] = self.state_hist[1:].clone()
         self.state_hist[-1, :self.num_obs] = state.clone()
         self.state_hist[-1, self.num_obs:self.num_obs + self.num_actions] = action_tensor.clone()
-        self.state_hist[:-1] = self.state_hist[1:].clone()
         
     def __call__(
         self,
@@ -146,6 +153,7 @@ class MPPIController(BaseController):
         vis_optim_traj=False,
         use_nn = False,
         vis_all_traj = False,
+        one_hot_delay = None,
     ):
         
         st_mppi = time.time()
@@ -185,17 +193,18 @@ class MPPIController(BaseController):
         # import pdb; pdb.set_trace()
         
         # st = time.time()
-        state_list = self._get_rollout(state_init, a_sampled, self.fix_history) # List
+        state_list, total_var = self._get_rollout(state_init, a_sampled, self.fix_history, one_hot_delay) # List
+        
         
         # print("rollout_end", time.time() - st)
         
         t_rollout = time.time() - st
         
         st = time.time()
-        
+        # print(torch.mean(total_var),torch.max(total_var),torch.min(total_var))
         # calculate reward
         reward_rollout = reward_fn(state_list, a_sampled, self.discount) # Tensor
-        cost_rollout = -reward_rollout
+        cost_rollout = -reward_rollout + self.alpha * total_var/30.
 
         # print("rollout time", time.time() - st)
 
@@ -224,7 +233,7 @@ class MPPIController(BaseController):
             if use_nn:
                 
                 print(colored(f"state init: {state_init}", "green"))
-                optim_traj = torch.vstack(self._get_rollout(state_init, self.a_mean.unsqueeze(0), self.fix_history)).detach().cpu().numpy()
+                optim_traj = torch.vstack(self._get_rollout(state_init, self.a_mean.unsqueeze(0), self.fix_history, one_hot_delay)[0]).detach().cpu().numpy()
                 
                 # import pdb; pdb.set_trace()
                 # print(colored(f"optimal tra (-1): {optim_traj[-1, :2]}" , "red"))
@@ -232,16 +241,16 @@ class MPPIController(BaseController):
                     import pdb; pdb.set_trace()
                     
             else:
-                optim_traj = torch.stack(self._get_rollout(state_init, self.a_mean.unsqueeze(0).repeat(self.n_rollouts, 1, 1), self.fix_history))[:, 0, :].detach().cpu().numpy()
+                optim_traj = torch.stack(self._get_rollout(state_init, self.a_mean.unsqueeze(0).repeat(self.n_rollouts, 1, 1), self.fix_history, one_hot_delay,debug=True)[0])[:, 0, :].detach().cpu().numpy()
                 # import pdb; pdb.set_trace()
                 print(colored(f"optimal tra (-1): {optim_traj[-1, :2]}" , "red"))
                 
-                if np.abs(optim_traj[-1, 0]) > 10:
+                if np.abs(optim_traj[-1, 0]) < -10000.:
                     import pdb; pdb.set_trace()
                     
                 
         # import pdb; pdb.set_trace()
-        
+        actions = self.a_mean.detach().cpu().numpy()
         self.a_mean = torch.cat([self.a_mean[1:], self.a_mean[-1:]], dim=0)
         self.a_cov = torch.cat([self.a_cov[1:], self.a_cov[-1:]], dim=0)
         # self.a_mean = torch.cat([self.a_mean[1:], self.a_mean_init], dim=0)
@@ -254,7 +263,7 @@ class MPPIController(BaseController):
         
         mppi_time = time.time() - st_mppi
         print("MPPI END", time.time())
-        info_dict = {'trajectory': None, 'action': None, 
+        info_dict = {'trajectory': optim_traj, 'action': actions, 
                 'action_candidate': None, 'x_all': None, 'y_all': None,
                 't_debug': {'sample': t_sample, 'rollout': t_rollout, 'calc_reward': t_calc_reward, 'misc': t_misc, 'total': mppi_time},} 
         
@@ -266,4 +275,4 @@ class MPPIController(BaseController):
         #     info_dict['all_trajectory'] = torch.stack(state_list).detach().cpu().numpy()
             # info_dict['all_trajectory'] = state_list
         # print("MPPI REAL END", time.time())
-        return u, info_dict
+        return u.cpu(), info_dict

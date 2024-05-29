@@ -16,18 +16,20 @@ def reward_track_fn(goal_list: torch.Tensor, defaul_speed: float):
         reward_activate = torch.ones((num_rollouts), device=action.device)
         
         # import pdb; pdb.set_trace()
-        for h in range(horizon):
+        for h in range(0,horizon):
             
             state_step = state[h+1]
             action_step = action[:, h]
             # import pdb; pdb.set_trace()
-            dist = torch.norm(state_step[:, :2] - goal_list[h+1, :2], dim=1)
+            dist = torch.norm(state_step[:, :2] - goal_list[h+1, :2], dim=1)**2
+            
             # vel_direction = state[h][:,:2] - state[h-1][:,:2]
             # pos_direction = - state[h][:,:2] + goal_list[h, :2] 
             # dot_product = (vel_direction * pos_direction).sum(dim=1)
             # cos_angle = dot_product / (torch.norm(pos_direction, dim=1) * torch.norm(vel_direction, dim=1) + 1e-7)
-            vel_diff = torch.norm(state_step[:, 3:4] - defaul_speed, dim=1)
-            reward = -dist - 0.0 * vel_diff - 0.0 * torch.norm(action_step[:, 1:2], dim=1)
+            # vel_diff = torch.norm(state_step[:, 3:4] - defaul_speed, dim=1)
+            vel_diff = torch.abs(state_step[:, 3] - goal_list[h+1, 3]) * (state_step[:, 3] > goal_list[h+1, 3])
+            reward = -dist - 3. * vel_diff - 0.0 * torch.norm(action_step[:, 1:2], dim=1)
             # reward = - 0.4 * dist - 0.0 * torch.norm(action_step, dim=1) - 0.0 * vel_diff - 0.1 * torch.log(1 + dist)
             # reward = - 0.4 * dist
             reward_rollout += reward *(discount ** h) * reward_activate
@@ -36,9 +38,10 @@ def reward_track_fn(goal_list: torch.Tensor, defaul_speed: float):
 
 #----------------- rollout functions -----------------#
 
-def rollout_fn_select(model_struct, model, dt, L, LR):
+def rollout_fn_select(model_struct, models, dt, L, LR, n_ensembles=3):
     
-    def rollout_fn_nn_heading(obs_history, last_state, action):
+    def rollout_fn_nn_heading(obs_history, last_state, action, one_hot_delay=None):
+        model = models[0]
         dt_nn = dt
         print(dt_nn)
         n_rollouts = action.shape[0]
@@ -56,7 +59,8 @@ def rollout_fn_select(model_struct, model, dt, L, LR):
         next_state[:, 3] += output_dot[:, 1]
         return next_state
     
-    def rollout_fn_nn_heading_psi(obs_history, last_state, action):
+    def rollout_fn_nn_heading_psi(obs_history, last_state, action, one_hot_delay=None):
+        model = models[0]
         dt_nn = dt
         n_rollouts = action.shape[0]
         
@@ -70,7 +74,8 @@ def rollout_fn_select(model_struct, model, dt, L, LR):
         next_state[:, 3] += output_dot[:, 4]
         return next_state
     
-    def rollout_fn_nn_end2end(obs_history, last_state, action):
+    def rollout_fn_nn_end2end(obs_history, last_state, action, one_hot_delay=None):
+        model = models[0]
         n_rollouts = action.shape[0]
         n_traj = obs_history.shape[1]
         obs_hist = obs_history.clone()
@@ -83,12 +88,13 @@ def rollout_fn_select(model_struct, model, dt, L, LR):
         next_state = fold_angle_tensor(output_dot, idx=2)
         return next_state
     
-    def rollout_fn_kbm(obs_history, state, action, debug=False):
+    def rollout_fn_kbm(obs_history, state, action, debug=False, one_hot_delay=None):
+        model = models[0]
         next_state = model.step(state[:, 0], state[:, 1], state[:, 2], state[:, 3], 
                                     action[:, 0], action[:, 1])
         return torch.stack(next_state, dim=1), {}
 
-    def rollout_fn_dbm(obs_history, state, action, debug=False):
+    def rollout_fn_dbm(obs_history, state, action, debug=False, one_hot_delay=None):
         assert state.shape[1] == 6
         assert action.shape[1] == 2
         # need state = [x, y, psi, vx, vy, omega]
@@ -99,13 +105,55 @@ def rollout_fn_select(model_struct, model, dt, L, LR):
         # vy = v_vec[:, 1] * torch.cos(state[:, 2]) - v_vec[:, 0] * torch.sin(state[:, 2])
         # vx = state[:, 3] * torch.cos(state[:, 2])
         # vy = state[:, 3] * torch.sin(state[:, 2])
+        model = models[0]
         next_state = model.step(state[:, 0], state[:, 1], state[:, 2], state[:, 3], state[:, 4], state[:, 5], action[:, 0], action[:, 1])
         # next state is [x, y, psi, vx, vy, omega]
         next_state = torch.stack(next_state, dim=1)
         # next_state = next_state[:, :4]
         return next_state, {}
     
+    def rollout_fn_nn(obs_history, state, action, debug=False, one_hot_delay=None):
+        # import pdb; pdb.set_trace()
+        # print(state.shape)
+        assert state.shape[1] == 6
+        assert action.shape[1] == 2
+        _X = obs_history[:,:-1,3:].reshape(obs_history.shape[0], -1)
+        X_ = torch.concat((state[:,3:], action),dim=1).double()
+        X = torch.cat((_X, X_), dim=1)
+        # print(one_hot_delay)
+        X = torch.cat((X, one_hot_delay.repeat((state.shape[0],1))), dim=1)
+        # if debug:
+        #     print(X[0])
+        # print(X.shape)
+        next_state = torch.tensor(state)
+        # gradX = 0.
+        outs = []
+        for i in range(len(models)):
+            model = models[i]        
+            # gradX += model(X).detach()
+            outs.append(model(X).detach())
+        outs = torch.stack(outs,dim=0)
+        # print(outs.shape)
+        gradX = torch.mean(outs,dim=0)
+        if outs.shape[0] > 1:
+            varX = torch.sum(torch.var(outs,dim=0),dim=1)
+        else :
+            varX = torch.zeros(state.shape[0]).to(state.device)
+        # print(torch.min(gradX[:,2]), torch.max(gradX[:,2]), torch.mean(gradX[:,2]))
+        next_state[:,3] += gradX[:,0] * dt
+        next_state[:,4] += gradX[:,1] * dt
+        next_state[:,5] += gradX[:,2] * dt
+        next_state[:,2] += state[:,5] * dt
+        # next_state = normalize_angle_tensor(next_state,idx=2)
+        next_state[:,0] += state[:,3] * torch.cos(state[:,2]) * dt - state[:,4] * torch.sin(state[:,2]) * dt
+        next_state[:,1] += state[:,3] * torch.sin(state[:,2]) * dt + state[:,4] * torch.cos(state[:,2]) * dt
+        
+        # next_state = next_state[:, :4]
+        # print(next_state.shape)
+        return next_state, {'var': varX}
+    
     def rollout_fn_nn_phyx_kbm(obs_history, last_state, action, debug=False):
+        model = models[0]
         n_rollouts = action.shape[0]
         # import pdb; pdb.set_trace()
         # print("obs_hist", obs_history.shape)
@@ -150,8 +198,8 @@ def rollout_fn_select(model_struct, model, dt, L, LR):
         return rollout_fn_nn_heading_psi
     elif model_struct == 'nn-end2end':
         return rollout_fn_nn_end2end
-    elif model_struct == 'nn-end2end-trunk':
-        return rollout_fn_nn_end2end_trunk
+    elif model_struct == 'nn':
+        return rollout_fn_nn
     elif model_struct == 'kbm':
         return rollout_fn_kbm
     elif model_struct == 'dbm':

@@ -32,9 +32,12 @@ class MPPIParams:
     
 class MPPIController(BaseController):
     def __init__(self,
-                params: MPPIParams, rollout_fn: callable, rollout_start_fn: callable, key):
+                params: MPPIParams, rollout_fn: callable, rollout_start_fn: callable, key, nn_model, rollout_fn_nn=None):
         """ MPPI implemented in Jax """
         self.params = params
+        self.nn_model = nn_model
+        if rollout_fn_nn is None:
+            self.rollout_fn_nn = rollout_fn
         self.rollout_fn = rollout_fn
         self.rollout_start_fn = rollout_start_fn
         self.key, _ = jax.random.split(key)
@@ -69,7 +72,7 @@ class MPPIController(BaseController):
     def _sample_actions(self, ):
         
         key, self.key = jax.random.split(self.key)
-        a_sampled = jax.random.multivariate_normal(key, self.a_mean, self.a_cov, (self.params.n_rollouts,self.params.H))
+        a_sampled = jax.random.multivariate_normal(key, self.a_mean*0, self.a_cov, (self.params.n_rollouts,self.params.H))
         # a_sampled = jax.random.uniform(key, (self.params.n_rollouts,self.params.H, 2), jnp.float32, -1., 1.)
         
         # smooth action
@@ -91,17 +94,29 @@ class MPPIController(BaseController):
     
     @partial(jax.jit, static_argnums=(0,))
     def _rollout_jit(self, carry, action):
-        state, obs_history = carry
+        state, obs_history, params = carry
+        obs_history = obs_history.at[:-1].set(obs_history[1:])    
         obs_history = obs_history.at[-1, :self.params.n_rollouts, :self.params.num_obs].set(state[:, :self.params.num_obs])
         obs_history = obs_history.at[-1, :self.params.n_rollouts, -self.params.num_actions:].set(action)
-        state, debug_info = self.rollout_fn(obs_history, state, action, self.params.debug)
-        obs_history = obs_history.at[:-1].set(obs_history[1:])    
-        return (state, obs_history), state
+        state, debug_info = self.rollout_fn(obs_history, state, action, params, self.params.debug)
+        return (state, obs_history, params), state
     
     @partial(jax.jit, static_argnums=(0,))
-    def _get_rollout(self, state_init, actions, fix_history=False):
+    def _rollout_jit_nn(self, carry, action):
+        state, obs_history, params = carry
+        obs_history = obs_history.at[:-1].set(obs_history[1:])    
+        obs_history = obs_history.at[-1, :self.params.n_rollouts, :self.params.num_obs].set(state[:, :self.params.num_obs])
+        obs_history = obs_history.at[-1, :self.params.n_rollouts, -self.params.num_actions:].set(action)
+        print(params)
+        # print("Passing to nn")
+        state, debug_info = self.rollout_fn_nn(obs_history, state, action, params, self.params.debug)
+        return (state, obs_history, params), state
+    
+    @partial(jax.jit, static_argnums=(0,))
+    def _get_rollout(self, state_init, actions, fix_history=False, use_nn=False, model_params=None):
         
         # st = time.time()
+        # print(model_params)
         n_rollouts = actions.shape[0]
         state = jnp.tile(jnp.expand_dims(state_init, 0), (n_rollouts, 1))
         # import pdb; pdb.set_trace()
@@ -118,7 +133,17 @@ class MPPIController(BaseController):
         
         # print("rollout_fn_start", time.time() - st)
         # import pdb; pdb.set_trace()
-        _, state_list2 = jax.lax.scan(self._rollout_jit, (state, obs_history), actions)
+        # use_nn = False
+        # print("Passing to rollout_jit", model_params)
+        (_, state_list2) = jax.lax.cond(use_nn,
+             lambda _: jax.lax.scan(self._rollout_jit_nn, (state, obs_history, model_params), actions),
+             lambda _: jax.lax.scan(self._rollout_jit, (state, obs_history, model_params), actions),
+             None)
+        # (_, state_list2) = jnp.where(jnp.array([use_nn==True]), jnp.array([jax.lax.scan(self._rollout_jit, (state, obs_history), actions)]), jnp.array([jax.lax.scan(self._rollout_jit_nn, (state, obs_history), actions)]))
+        # if use_nn==True:
+        #     _, state_list2 = jax.lax.scan(self._rollout_jit_nn, (state, obs_history), actions)
+        # else :
+        #     _, state_list2 = jax.lax.scan(self._rollout_jit, (state, obs_history), actions)
         state_list = jnp.array(state_list + list(state_list2))
         # print("rollout_fn_end", time.time() - st)
         # import pdb; pdb.set_trace()
@@ -196,18 +221,20 @@ class MPPIController(BaseController):
         
         reward = reward_fn(state, action, self.params.discount) # Tensor
     
+    # @partial(jax.jit, static_argnums=(0,))
     def feed_hist(self, obs, action):
         state = jnp.array(obs[:self.params.num_obs])
         action_tensor = jnp.array(action[:self.params.num_actions])
-        self.state_hist[-1, :self.params.num_obs] = state.copy()
-        self.state_hist[-1, self.params.num_obs:self.num_obs + self.params.num_actions] = action_tensor.copy()
-        self.state_hist[:-1] = self.state_hist[1:].copy()
-        
+        self.state_hist = self.state_hist.at[:-1].set(self.state_hist[1:])
+        self.state_hist = self.state_hist.at[-1, :self.params.num_obs].set(state)
+        self.state_hist = self.state_hist.at[-1, self.params.num_obs:self.params.num_obs + self.params.num_actions].set(action_tensor)
+    
     @partial(jax.jit, static_argnums=(0,))
     def __call__(
         self,
         obs,
         goal_list, 
+        model_params,
         vis_optim_traj=False,
         use_nn = False,
         vis_all_traj = False,
@@ -248,7 +275,7 @@ class MPPIController(BaseController):
         
         # st = time.time()
         # import pdb; pdb.set_trace()
-        state_list = self._get_rollout(state_init, a_sampled, self.params.fix_history) # List
+        state_list = self._get_rollout(state_init, a_sampled, self.params.fix_history, use_nn=use_nn, model_params=model_params) # List
         
         # print("rollout_end", time.time() - st)
         
@@ -289,7 +316,7 @@ class MPPIController(BaseController):
                 
         optim_traj = None
         action_expand = jnp.tile(jnp.expand_dims(self.a_mean, 0), (self.params.n_rollouts, 1, 1))
-        optim_traj = jnp.stack(self._get_rollout(state_init, action_expand, self.params.fix_history))[:, 0]
+        optim_traj = jnp.stack(self._get_rollout(state_init, action_expand, self.params.fix_history, model_params=model_params))[:, 0]
         # if vis_optim_traj:
         #     if use_nn:
         #         raise NotImplementedError
@@ -329,8 +356,9 @@ class MPPIController(BaseController):
         print("MPPI END", time.time())
         info_dict = {
             'trajectory': optim_traj, 
-            'action': None, 
-             'all_traj': state_list[:, best_100_idx],
+            'action': self.a_mean, 
+            'all_action': a_sampled_raw,
+             'all_traj': state_list,#[:, best_100_idx],
                 'action_candidate': None, 'x_all': None, 'y_all': None,
                 't_debug': {'sample': t_sample, 'rollout': t_rollout, 'calc_reward': t_calc_reward, 'misc': t_misc, 'total': mppi_time, 'MPPI_START': st_mppi, "MPPI_END": time.time()},} 
         

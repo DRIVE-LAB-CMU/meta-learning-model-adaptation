@@ -3,7 +3,7 @@ import jax.numpy as jnp
 from dataclasses import dataclass
 import time 
 from functools import partial
-
+import numpy as np
 
 GRAVITY = 9.81
 @dataclass
@@ -29,18 +29,19 @@ class DynamicParams:
     DT: float = .05
     K_RFY: float = 20.
     K_FFY: float = 20.
-    Iz: float = 0.07
+    Iz: float = 0.1
     Ta: float = 5.5
     Tb: float = -1.
     Sa: float = 0.36
     Sb: float = 0.03
-    mu: float = 1.0
-    Cf: float = 2.28
-    Cr: float = 2.28
-    Bf: float = 5.0
-    Br: float = 5.0
-    hcom: float = 0.1
-    fr: float = 0.05
+    mu: float = 3.0
+    Cf: float = 1.0
+    Cr: float = 1.0
+    Bf: float = 60.0
+    Br: float = 60.0
+    hcom: float = 0.0
+    fr: float = 0.0
+    delay: int = 4
     
     def to_dict(self):
         return {
@@ -63,6 +64,7 @@ class DynamicParams:
             'Br': self.Br,
             'hcom': self.hcom,
             'fr': self.fr,
+            'delay': self.delay,
         }
     
     
@@ -88,6 +90,8 @@ class DynamicBicycleModel:
         self.batch_Br = jnp.ones(params.num_envs, dtype=jnp.float32) * params.Br
         self.batch_hcom = jnp.ones(params.num_envs, dtype=jnp.float32) * params.hcom
         self.batch_fr = jnp.ones(params.num_envs, dtype=jnp.float32) * params.fr
+        self.batch_buffer = np.zeros((params.num_envs, params.delay, 2))
+        
     def reset(self, ):
         ...
 
@@ -102,9 +106,16 @@ class DynamicBicycleModel:
              batch_omega,
              batch_target_vel,
              batch_target_steer,
+            #  debug=False
         ):
+        
         """ Implement RK 4, with dynamics forward fn: dbm_dxdt """
         # k1
+        # self.batch_buffer.at[:,1:,:].set(self.batch_buffer[:,:-1,:])
+        # self.batch_buffer.at[:,0,0].set(batch_target_vel)
+        # self.batch_buffer.at[:,0,1].set(batch_target_steer)
+        # print("Haha?")
+            # print(self.batch_buffer)
         k1 = dbm_dxdt(batch_x,
                         batch_y,
                         batch_psi,
@@ -222,6 +233,7 @@ class DynamicBicycleModel:
         next_vy = batch_vy + self.params.DT / 6.0 * (k1[4] + 2 * k2[4] + 2 * k3[4] + k4[4])
         next_omega = batch_omega + self.params.DT / 6.0 * (k1[5] + 2 * k2[5] + 2 * k3[5] + k4[5])
         
+        
         return next_x, next_y, next_psi, next_vx, next_vy, next_omega
     
     def step_euler(self,
@@ -301,7 +313,7 @@ class DynamicBicycleModel:
         F_fy = self.batch_K_FFY * alpha_f
         F_ry = self.batch_K_RFY * alpha_r
         
-        next_vx = batch_vx + (F_rx - F_fy * jnp.sin(steer) + batch_vy * batch_omega * self.batch_MASS) * self.batch_DT / self.batch_MASS
+        next_vx = batch_vx + (F_rx - F_fy * jnp.sin(steer) + 0.* batch_vy * batch_omega * self.batch_MASS) * self.batch_DT / self.batch_MASS
         next_vy = batch_vy + (F_ry + F_fy * jnp.cos(steer) - batch_vx * batch_omega * self.batch_MASS) * self.batch_DT / self.batch_MASS
         next_omega = batch_omega + (F_fy*self.batch_LF*jnp.cos(steer) - F_ry*self.batch_LR) * self.batch_DT / self.batch_Iz
         # print("dbm part 3", time.time() - st)
@@ -358,8 +370,13 @@ class DynamicBicycleModel:
         batch_vy = jnp.array(state.vy)
         batch_omega = jnp.array(state.omega)
         
-        batch_target_vel = jnp.array(action.target_vel)
-        batch_target_steer = jnp.array(action.target_steer)
+        self.batch_buffer[:,1:,:] = self.batch_buffer[:,:-1,:]
+        self.batch_buffer[:,0,0] = action.target_vel
+        self.batch_buffer[:,0,1] = action.target_steer
+        
+        batch_target_vel = jnp.array(self.batch_buffer[:,-1,0])
+        batch_target_steer = jnp.array(self.batch_buffer[:,-1,1])
+        
         next_x, next_y, next_psi, next_vx, next_vy, next_omega = self.step(
             batch_x,
             batch_y,
@@ -369,7 +386,9 @@ class DynamicBicycleModel:
             batch_omega,
             batch_target_vel,
             batch_target_steer,
+            # debug=True
         )
+        # print(np.array(next_x), np.array(next_y), np.array(next_psi), np.array(next_vx), np.array(next_vy), np.array(next_omega))
         return CarState(
             x=next_x[0],
             y=next_y[0],
@@ -442,8 +461,8 @@ def dbm_dxdt(
     F_fz = 0.5 * batch_MASS * GRAVITY * batch_LR / (batch_LF + batch_LR) - 0.5 * batch_hcom / (batch_LF + batch_LR) * F_rx
     F_rz = 0.5 * batch_MASS * GRAVITY * batch_LF / (batch_LF + batch_LR) + 0.5 * batch_hcom / (batch_LF + batch_LR) * F_rx 
 
-    F_fy = batch_mu * F_fz * jnp.sin(batch_Cf * jnp.arctan(batch_Bf * alpha_f))
-    F_ry = batch_mu * F_rz * jnp.sin(batch_Cr * jnp.arctan(batch_Br * alpha_r))
+    F_fy = 2 * batch_mu * F_fz * jnp.sin(batch_Cf * jnp.arctan(batch_Bf * alpha_f))
+    F_ry = 2 * batch_mu * F_rz * jnp.sin(batch_Cr * jnp.arctan(batch_Br * alpha_r))
     
     # F_fy = batch_K_FFY * alpha_f
     # F_ry = batch_K_RFY * alpha_r

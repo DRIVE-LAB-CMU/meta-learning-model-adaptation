@@ -8,11 +8,11 @@ setup(
     description='A package for simplify RC Car dynamics application.',
     packages=['car_dynamics','bayes_race'],
     install_requires=[
-        'termcolor',
+        # 'termcolor',
         'rich',
         'scipy',
         'pandas',
-        'gym',
+        # 'gym',
 		# 'cvxpy',
 		# 'casadi',
 		# 'botorch==0.1.4',

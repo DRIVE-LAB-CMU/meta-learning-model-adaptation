@@ -59,8 +59,8 @@ class OffroadCar(gym.Env):
         
         self.state = CarState(
             x=0.,
-            y=-1.4,
-            psi=0.,
+            y=0,
+            psi=-np.pi/2,
             vx=0.,
             vy=0.,
             omega=.0,
