@@ -2,6 +2,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pandas as pd
+import yaml
 
 def counter_circle(theta):
     center = (0., 0.)
@@ -35,7 +36,7 @@ def custom_fn(theta, traj):
     ratio = (theta - traj[i, 0]) / (traj[i + 1, 0] - traj[i, 0])
     x, y = traj[i, 1] + ratio * (traj[i + 1, 1] - traj[i, 1]), traj[i, 2] + ratio * (traj[i + 1, 2] - traj[i, 2])
     v = traj[i, 3] + ratio * (traj[i + 1, 3] - traj[i, 3])
-    return jnp.array([x, y]), v
+    return jnp.array([x, y]), 0.7*v
     
     
 def counter_square(theta):
@@ -72,8 +73,22 @@ class WaypointGenerator:
             self.fn = counter_oval
         elif waypoint_type == 'counter square':
             self.fn = counter_square
+        elif waypoint_type.endswith('.yaml'):
+            yaml_content = yaml.load(open(waypoint_type, 'r'), Loader=yaml.FullLoader)
+            centerline_file = yaml_content['track_info']['centerline_file']
+            self.scale = yaml_content['track_info']['scale']
+            ox = yaml_content['track_info']['ox']
+            oy = yaml_content['track_info']['oy']
+            self.fn = custom_fn
+            df = pd.read_csv('/home/dvij/lecar-car/ref_trajs/' + centerline_file + '_with_speeds.csv')
+            self.path = np.array(df.iloc[:,:])*self.scale + np.array([0, ox, oy, 0])
+            self.path[:,-1] /= np.sqrt(self.scale)
+            print(self.path)
+            self.waypoint_type = 'custom'
+            self.scale = 20
         else :
             self.fn = custom_fn
+            self.scale = 1.
             df = pd.read_csv('/home/dvij/lecar-car/ref_trajs/' + self.waypoint_type + '_with_speeds.csv')
             self.path = np.array(df.iloc[:,:])
             self.waypoint_type = 'custom'
@@ -83,7 +98,7 @@ class WaypointGenerator:
         self.H = H
         self.speed = speed
         if self.waypoint_type == 'custom':
-            self.waypoint_t_list = jnp.arange(0, self.path[-1,0], 0.1)
+            self.waypoint_t_list = jnp.arange(0, self.path[-1,0], 0.1*self.scale)
             self.waypoint_list = jnp.array([self.fn(t,self.path)[0] for t in self.waypoint_t_list])
         else :
             self.waypoint_t_list = jnp.arange(0, jnp.pi*2+dt, dt / speed)
@@ -135,10 +150,23 @@ class WaypointGenerator:
                         t_idx = t_idx2 
                 self.last_i = t_idx
             t_closed = self.waypoint_t_list[t_idx]
+            t_closed_refined = t_closed - 0.1*self.scale
+            pos_refined, _ = self.fn(t_closed_refined, self.path)
+            dist_refined = jnp.linalg.norm(pos_refined - pos2d)
+            for j in range(40):
+                if dist_refined < 0.5:
+                    break
+                t_closed_refined_ = t_closed - 0.1*self.scale + 2*j*0.1*self.scale/40
+                pos_refined, _ = self.fn(t_closed_refined_, self.path)
+                dist_refined_ = jnp.linalg.norm(pos_refined - pos2d)
+                if dist_refined_ < dist_refined:
+                    dist_refined = dist_refined_
+                    t_closed_refined = t_closed_refined_
             target_pos_list = []
-            _, speed = self.fn(t_closed, self.path)
+            _, speed = self.fn(t_closed_refined, self.path)
             for i in range(self.H+1):
-                t = t_closed + i * self.dt * speed 
+                # print(speed)
+                t = t_closed_refined + i * self.dt * speed
                 t_1 = t + self.dt * speed
                 pos, speed = self.fn(t, self.path)
                 pos_next, _ = self.fn(t_1, self.path)

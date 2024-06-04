@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import os
 import pickle
 
-suffix = '_en3_1'
+suffix = '_en3'
 exp_name_ = 'pre_train_fixed_delay_init'
 t = 10
 n_ensembles = 3
@@ -39,7 +39,7 @@ plt.savefig('data/' + exp_name_ + suffix + '/loss.png')
 
 plt.figure()
 for i in range(1,t+1):
-    if i!=1 and i!=5:
+    if i!=3 and i!=-1:
         exp_name = exp_name_ + str(i)
     else:
         exp_name = exp_name_ + str(2)

@@ -27,8 +27,8 @@ def process_csv(input_file: str, output_file: str, factor: float):
     df_first_two_columns.to_csv(output_file, index=False)
 
 # Example usage
-input_file = 'rounded_rectangle.csv'  # Path to the input CSV file
-output_file = 'rounded_rectangle.csv'  # Path to the output CSV file
-factor = 10.0  # Factor by which to divide the first two columns
+input_file = 'berlin_2018.csv'  # Path to the input CSV file
+output_file = 'berlin_2018-large.csv'  # Path to the output CSV file
+factor = 1./20.  # Factor by which to divide the first two columns
 
 process_csv(input_file, output_file, factor)

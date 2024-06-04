@@ -195,7 +195,7 @@ class MPPIController(BaseController):
         reward_psi = -diff_psi ** 2
         reward_vel = -diff_vel ** 2
         reward_vy = -(state_step[:, 4] - (-.5)) ** 2
-        reward = reward_pos_err * 5. + reward_slip_angle * .00 + reward_psi * 0. + reward_vel * 1.0 + reward_vy * 0.
+        reward = reward_pos_err * 5. + reward_slip_angle * .00 + reward_psi * 0. + reward_vel * 0.0 + reward_vy * 0.
         # reward -= diff_vy + diff_vyaw + diff_vx
         reward *= (self.params.discount ** step)
         return (step + 1, action_step), reward

@@ -433,7 +433,7 @@ def dbm_dxdt(
     prev_vel = jnp.sqrt(batch_vx**2 + batch_vy**2)
     # print("vel omega", prev_vel, batch_omega)
     # print(batch_target_vel.shape, batch_Ta.shape, batch_Tb.shape, prev_vel.shape)
-    throttle = batch_target_vel * batch_Ta + batch_Tb * prev_vel
+    throttle = batch_target_vel * batch_Ta - batch_target_vel * batch_Tb * prev_vel
     # assert jnp.all(batch_Ta > 0)
     # print(batch_target_vel)
     # print(throttle)

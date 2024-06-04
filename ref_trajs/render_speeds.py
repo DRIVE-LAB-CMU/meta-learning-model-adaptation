@@ -3,9 +3,10 @@ import matplotlib.pyplot as plt
 import os
 import pandas as pd
 
-a_max = 0.5
-v_max = 20.
-mu = 0.5
+a_max = 3.0
+a_v = 0.1
+v_max = 30.
+mu = 0.8
 g = 9.81
 mass = 1.
 
@@ -25,8 +26,8 @@ def add_columns_to_csv(input_file: str, output_file: str):
         raise ValueError("The input CSV must have exactly two columns")
     
     # Add new columns with specified names and a constant value
-    df['w_tr_right_m'] = 0.2
-    df['w_tr_left_m'] = 0.2
+    df['w_tr_right_m'] = 2.0
+    df['w_tr_left_m'] = 2.0
     
     # Save the modified DataFrame to a new CSV file
     df.to_csv(output_file, index=False)
@@ -40,13 +41,13 @@ def add_ggv(input_file: str, output_file: str) :
 
 def add_speeds(input_file: str, output_file: str):
     df = pd.read_csv(input_file)
-    df.iloc[:,1] = a_max
     df.iloc[:,0] *= v_max / df.iloc[-1,0]
+    df.iloc[:,1] = a_max - a_v * df.iloc[:,0]
     df.to_csv(output_file, index=False)
     
     
 # Example usage
-input_track = 'berlin_2018.csv'
+input_track = 'berlin_2018-large.csv'
 output_file = '../global_racetrajectory_optimization/inputs/tracks/input.csv'
 
 add_columns_to_csv(input_track, output_file)

@@ -50,7 +50,7 @@ N_ROLLOUTS = 100
 var_params = args.var
 if not var_params :
     N_ROLLOUTS = 10000
-H = 50
+H = 1000
 SIGMA = 1.0
 LF = .16
 LR = .15

@@ -78,8 +78,8 @@ class MPPIController(BaseController):
     def _sample_actions(self, ):
         
         # st = time.time()
-        action_dist = MultivariateNormal(loc=self.a_mean, covariance_matrix=self.a_cov)
-        # action_dist = MultivariateNormal(loc=self.a_mean*0, covariance_matrix=self.a_cov)
+        # action_dist = MultivariateNormal(loc=self.a_mean, covariance_matrix=self.a_cov)
+        action_dist = MultivariateNormal(loc=self.a_mean*0, covariance_matrix=self.a_cov)
         # action_dist = Uniform(self.a_mean*0-1., self.a_mean*0+1.)
         # print("torch sample time", time.time() - st)
         
