@@ -74,12 +74,26 @@ class MPPIController(BaseController):
         self.state_init_buf = torch.ones((self.num_obs,), device=self.device)
         self.x_all = []
         self.y_all = []
+    
+    def pure_pursuit(self, state, target_pos, L=2.,steer_factor=.34):
+        # print(target_pos, state)
+        dx_ = target_pos[0] - state[0]
+        dy_ = target_pos[1] - state[1]
+        theta = state[2]
+        dx = dx_ * np.cos(theta) + dy_ * np.sin(theta)
+        dy = -dx_ * np.sin(theta) + dy_ * np.cos(theta)
+        steer = 2. * L * dy / (dx**2 + dy**2)
+        return float(steer/steer_factor)
         
-    def _sample_actions(self, ):
+    def _sample_actions(self, curr_state, target_pos):
         
         # st = time.time()
         # action_dist = MultivariateNormal(loc=self.a_mean, covariance_matrix=self.a_cov)
-        action_dist = MultivariateNormal(loc=self.a_mean*0, covariance_matrix=self.a_cov)
+        act_mean = self.a_mean*0
+        steer_mean = self.pure_pursuit(curr_state, target_pos)
+        # print(act_mean.shape)
+        # act_mean[:, 1] = steer_mean
+        action_dist = MultivariateNormal(loc=act_mean, covariance_matrix=self.a_cov)
         # action_dist = Uniform(self.a_mean*0-1., self.a_mean*0+1.)
         # print("torch sample time", time.time() - st)
         
@@ -154,18 +168,19 @@ class MPPIController(BaseController):
         use_nn = False,
         vis_all_traj = False,
         one_hot_delay = None,
+        target_pos=None,
     ):
         
         st_mppi = time.time()
         # print("MPPI START", st_mppi)
         st = time.time()
 
-        a_sampled_raw = self._sample_actions() # Tensor
+        a_sampled_raw = self._sample_actions(obs,target_pos) # Tensor
 
         
         # print("sample time", time.time() - st)
         ## Delay
-        # st = time.time()
+        st = time.time()
         # a_sampled = torch.zeros((self.n_rollouts, self.H + self.delay, a_sampled_raw.shape[2])).to(self.device)
         a_sampled = self.action_init_buf.clone()
         for i in range(self.delay):
@@ -189,10 +204,10 @@ class MPPIController(BaseController):
         # print(obs)
         
         
-        # print("rollout_start", time./time() - st)
+        # print("rollout_start", time.time() - st)
         # import pdb; pdb.set_trace()
         
-        # st = time.time()
+        st = time.time()
         state_list, total_var = self._get_rollout(state_init, a_sampled, self.fix_history, one_hot_delay) # List
         
         
@@ -206,11 +221,11 @@ class MPPIController(BaseController):
         reward_rollout = reward_fn(state_list, a_sampled, self.discount) # Tensor
         cost_rollout = -reward_rollout + self.alpha * total_var/30.
 
-        # print("rollout time", time.time() - st)
 
         cost_exp = torch.exp(-(cost_rollout - torch.min(cost_rollout)) / self.lam)
         weight = cost_exp / cost_exp.sum()
         # import pdb; pdb.set_trace()
+        # print("reward calc time", time.time() - st)
         
         t_calc_reward = time.time() - st
         
@@ -225,9 +240,9 @@ class MPPIController(BaseController):
                     ) * self.gamma_sigma + self.a_cov * (1 - self.gamma_sigma)
         
         u = self.a_mean[0]
-
+        # print("update time", time.time() - st)
         t_misc = time.time() - st
-                
+        st = time.time()
         optim_traj = None
         if vis_optim_traj:
             if use_nn:
@@ -241,16 +256,25 @@ class MPPIController(BaseController):
                     import pdb; pdb.set_trace()
                     
             else:
-                optim_traj = torch.stack(self._get_rollout(state_init, self.a_mean.unsqueeze(0).repeat(self.n_rollouts, 1, 1), self.fix_history, one_hot_delay,debug=True)[0])[:, 0, :].detach().cpu().numpy()
+                # optim_traj = torch.stack(self._get_rollout(state_init, self.a_mean.unsqueeze(0), self.fix_history, one_hot_delay)[0])[:, 0, :].detach().cpu().numpy()
                 # import pdb; pdb.set_trace()
-                print(colored(f"optimal tra (-1): {optim_traj[-1, :2]}" , "red"))
+                # optim_traj 
+                optim_traj = np.zeros((self.H + 1, 3))
+                # print(colored(f"optimal tra (-1): {optim_traj[-1, :2]}" , "red"))
                 
                 if np.abs(optim_traj[-1, 0]) < -10000.:
                     import pdb; pdb.set_trace()
                     
-                
+        # print("vis time", time.time() - st)
+        st = time.time()
         # import pdb; pdb.set_trace()
-        actions = self.a_mean.detach().cpu().numpy()
+        # print(self.a_mean.shape)
+        actions = self.a_mean.detach()
+        # print("SAMPLE END", time.time()-st)
+        actions = actions.cpu()
+        # print("SAMPLE END", time.time()-st)
+        actions = actions.numpy()
+        # print("SAMPLE END", time.time()-st)
         self.a_mean = torch.cat([self.a_mean[1:], self.a_mean[-1:]], dim=0)
         self.a_cov = torch.cat([self.a_cov[1:], self.a_cov[-1:]], dim=0)
         # self.a_mean = torch.cat([self.a_mean[1:], self.a_mean_init], dim=0)
@@ -262,17 +286,14 @@ class MPPIController(BaseController):
         
         
         mppi_time = time.time() - st_mppi
-        print("MPPI END", time.time())
+        # print("MPPI END", time.time()-st)
         info_dict = {'trajectory': optim_traj, 'action': actions, 
                 'action_candidate': None, 'x_all': None, 'y_all': None,
                 't_debug': {'sample': t_sample, 'rollout': t_rollout, 'calc_reward': t_calc_reward, 'misc': t_misc, 'total': mppi_time},} 
         
-        # info_dict = {'trajectory': optim_traj, 'action': self.a_mean.detach().cpu().numpy(), 
-        #              'action_candidate': a_sampled.detach().cpu().numpy(), 'x_all': self.x_all, 'y_all': self.y_all,
-        #              't_debug': {'sample': t_sample, 'rollout': t_rollout, 'calc_reward': t_calc_reward, 'misc': t_misc, 'total': mppi_time},} 
-        # if vis_all_traj:
-        #     raise NotImplementedError
-        #     info_dict['all_trajectory'] = torch.stack(state_list).detach().cpu().numpy()
-            # info_dict['all_trajectory'] = state_list
-        # print("MPPI REAL END", time.time())
-        return u.cpu(), info_dict
+        # print("MPPI REAL END", time.time() - st)
+        t1 = time.time()
+        u = u.cpu()
+        t2 = time.time()
+        # print("u to cpu", t2 - t1)
+        return u, info_dict

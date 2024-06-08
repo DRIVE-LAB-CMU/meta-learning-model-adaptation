@@ -254,10 +254,11 @@ def acc_X_lstm(states,cmds,art_delay=ART_DELAY) :
     Y = (np.array(states)[1:] - np.array(states)[:-1])
     X = torch.tensor(X).double().unsqueeze(0)
     Y = torch.tensor(Y).double().unsqueeze(0)
-    
-    return X, Y
+    wts = torch.ones_like(Y)
+    wts[:,:9] = 0.
+    return X, Y, wts
 
-def train_X_lstm(X, Y) :
+def train_X_lstm(X, Y, wts) :
     global model, stats
     # Zero the parameter gradients
     optimizer.zero_grad()
@@ -266,8 +267,10 @@ def train_X_lstm(X, Y) :
     
     outputs, cn = model(X)
     Y = torch.tensor(Y)
+    # print(outputs,Y/DT)
     # Compute the loss
-    loss = criterion(outputs, Y/DT)
+    loss = criterion(wts*outputs, wts*Y/DT)
+    print(float(loss.item()))
     stats['losses'].append(float(loss.item()))
     loss.backward()
     optimizer.step()
@@ -428,6 +431,7 @@ for epoch in range(n_epochs):
     for j in tqdm.tqdm(range(0,data_states.shape[1]-batch_size,batch_size)):
         Xs = []
         Ys = []
+        wts = []
         for i in range(j,j+batch_size):
             if args.var_delay:
                 delay = np.random.randint(0,5)
@@ -453,33 +457,35 @@ for epoch in range(n_epochs):
             if MODEL == 'nn' :
                 X, Y = acc_X(data_states[:-1,i,3:],data_actions[i,:,:],art_delay=delay,one_hot_delay=one_hot_delay,print_pred_delay=print_pred_delay,train=True)
             elif MODEL == 'nn-lstm' :
-                X, Y = acc_X_lstm(data_states[:-1,i,3:],data_actions[i,:,:],art_delay=delay)
+                X, Y, wt = acc_X_lstm(data_states[:-1,i,3:],data_actions[i,:,:],art_delay=delay)
             # print(X.shape,Y.shape)
             if MODEL == 'nn-lstm' :
                 Xs.append(X[:,:45])
                 Ys.append(Y[:,:45])
+                wts.append(wt[:,:45])
             else :
                 Xs.append(X)
                 Ys.append(Y)
         X = torch.cat(Xs,dim=0)
         # print(X.shape,Xs[0].shape)
         Y = torch.cat(Ys,dim=0)
+        Wt = torch.cat(wts,dim=0)
         # print(Y.shape,Ys[0].shape)
         if MODEL == 'nn' :
             train_X(X,Y)
         elif MODEL == 'nn-lstm' :
-            train_X_lstm(X,Y)
+            train_X_lstm(X,Y,Wt)
         
         if (j//batch_size)%(1000//batch_size)==0 :
             for k in range(N_ensembles):
-                print("Model",str(k),"Epoch",epoch,"Loss",np.mean(stats['losses'+str(k)][-1000:]))
+                print("Model",str(k),"Epoch",epoch,"Loss",np.mean(stats['losses'][-1000:]))
             # print("Epoch",epoch,"Loss",np.mean(stats['losses'][-1000:]))
             # print("Epoch",epoch,"Losses delay",np.mean(stats['losses_delay'][-data_states.shape[1]//10:]))
     losses.append(np.mean(stats['losses'][-data_states.shape[1]:]))
     if epoch>2 and epoch%3==0 :
         # print(model.fc[0].weight.data)
-        for k in range(N_ensembles):
-            torch.save(models[k].state_dict(), filename[:-4]+str(k)+'.pth')
-        # torch.save(model.state_dict(), filename[:-4]+'.pth')
+        # for k in range(N_ensembles):
+        #     torch.save(models[k].state_dict(), filename[:-4]+str(k)+'.pth')
+        torch.save(model.state_dict(), filename[:-4]+'.pth')
         torch.save(model_delay.state_dict(), filename[:-4]+'_delay.pth')
 np.savetxt(filename, losses)

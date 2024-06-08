@@ -82,7 +82,7 @@ class CarController(Node):
         # print("Started?")
         self.subscription  # prevent unused variable warning    
         if SYNC:
-            self.timer = self.create_timer(0.02, self.publish_data)
+            self.timer = self.create_timer(0.01, self.publish_data)
         else :
             self.timer = self.create_timer(0.05, self.publish_data)
         self.publisher_scan = self.create_publisher(
@@ -139,6 +139,8 @@ class CarController(Node):
     def cmd_callback(self, msg):
         # print("Received new command", msg.steering_angle, msg.acceleration)
         # Process steering and throttle commands received from ackerman_cmd topic
+        if msg.acceleration < -2.:
+            self.env.reset()
         self.cmd_buffer[0,0] = msg.steering_angle
         self.cmd_buffer[0,1] = msg.acceleration
         self.received_cmd = True

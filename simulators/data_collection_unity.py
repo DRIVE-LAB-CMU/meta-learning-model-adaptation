@@ -19,7 +19,7 @@ BASE_NAME = 'data_states_actions'
 if var_params:
     BASE_NAME += '_var'
 
-env = UnityEnvironment(file_name="ros2-env-v2/sim", seed=1,worker_id=0,log_folder='logs/',no_graphics=True)
+env = UnityEnvironment(file_name="ros2-env-v2/sim", seed=1,worker_id=0,log_folder='logs/',no_graphics=False)
 env.reset()
 datas_states = []
 datas_actions = []
@@ -36,7 +36,7 @@ for i in range(N_ROLLOUTS):
         params['vehicle_params']['mu_f'] = np.random.uniform(.5, 1.)
         params['vehicle_params']['mu_r'] = np.random.uniform(.5, 1.)
         yaml.dump(params,open('params.yaml','w'))
-        env = UnityEnvironment(file_name="ros2-env-v2/sim", seed=1,worker_id=0,log_folder='logs/',no_graphics=True)
+        env = UnityEnvironment(file_name="ros2-env-v2/sim", seed=1,worker_id=0,log_folder='logs/',no_graphics=False)
     env.reset()
     amps_steer = np.random.random(ts.shape)
     amps_steer[0] *= 4.

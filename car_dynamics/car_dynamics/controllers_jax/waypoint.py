@@ -36,7 +36,7 @@ def custom_fn(theta, traj):
     ratio = (theta - traj[i, 0]) / (traj[i + 1, 0] - traj[i, 0])
     x, y = traj[i, 1] + ratio * (traj[i + 1, 1] - traj[i, 1]), traj[i, 2] + ratio * (traj[i + 1, 2] - traj[i, 2])
     v = traj[i, 3] + ratio * (traj[i + 1, 3] - traj[i, 3])
-    return jnp.array([x, y]), 0.7*v
+    return jnp.array([x, y]), 0.8*v
     
     
 def counter_square(theta):
@@ -164,6 +164,7 @@ class WaypointGenerator:
                     t_closed_refined = t_closed_refined_
             target_pos_list = []
             _, speed = self.fn(t_closed_refined, self.path)
+            kin_pos, _ = self.fn(t_closed_refined+1.2*speed, self.path)
             for i in range(self.H+1):
                 # print(speed)
                 t = t_closed_refined + i * self.dt * speed
@@ -176,7 +177,7 @@ class WaypointGenerator:
                 psi = jnp.arctan2(pos_next[1] - pos[1], pos_next[0] - pos[0])
                 # print(speed, speed_ref)
                 target_pos_list.append(jnp.array([pos[0], pos[1], psi, speed]))
-            return jnp.array(target_pos_list)
+            return jnp.array(target_pos_list), kin_pos
         
         
     

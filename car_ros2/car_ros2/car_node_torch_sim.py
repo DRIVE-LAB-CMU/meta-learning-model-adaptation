@@ -97,7 +97,7 @@ if SIM == 'unity' :
     
 print("Params are: ", model_params)
 model_params_single = DynamicParams(num_envs=1, DT=DT,Sa=0.36, Sb=-0., Ta=20., Tb=.0, mu=0.5,delay=DELAY)#random.randint(1,5))
-stats = {'lat_errs': [], 'ws_gt': [], 'ws_': [], 'ws': [], 'losses': [], 'date_time': time.strftime("%m/%d/%Y %H:%M:%S"),'buffer': 100, 'lr': learning_rate, 'online_transition': 300, 'delay': DELAY, 'model': MODEL, 'speed': SPEED, 'total_length': 5000, 'history': HISTORY, 'params': model_params}
+stats = {'lat_errs': [], 'ws_gt': [], 'ws_': [], 'ws': [], 'losses': [], 'date_time': time.strftime("%m/%d/%Y %H:%M:%S"),'buffer': 100, 'lr': learning_rate, 'online_transition': 300, 'delay': DELAY, 'model': MODEL, 'speed': SPEED, 'total_length': 1500, 'history': HISTORY, 'params': model_params}
 for i in range(N_ensembles):
     stats['losses'+str(i)] = []
     
@@ -415,7 +415,7 @@ class CarNode(Node):
         self.ref_trajectory_pub_ = self.create_publisher(Path, 'ref_trajectory', 1)
         self.pose_pub_ = self.create_publisher(PoseWithCovarianceStamped, 'pose', 1)
         self.odom_pub_ = self.create_publisher(Odometry, 'odom', 1)
-        self.timer_ = self.create_timer(0.02, self.timer_callback)
+        self.timer_ = self.create_timer(0.01, self.timer_callback)
         self.slow_timer_ = self.create_timer(10.0, self.slow_timer_callback)
         self.throttle_pub_ = self.create_publisher(Float64, 'throttle', 1)
         self.steer_pub_ = self.create_publisher(Float64, 'steer', 1)
@@ -444,7 +444,7 @@ class CarNode(Node):
         # np.arctan2(Rt[0], Rt[2])
         psi = np.arctan2(Rt[0], Rt[2])
         
-        print("psi: ", psi)
+        # print("psi: ", psi)
         self.unity_state[0] = px
         self.unity_state[1] = py
         self.unity_state[2] = psi
@@ -484,7 +484,7 @@ class CarNode(Node):
         # t_closed = waypoint_t_list[t_idx]
         # target_pos_list = [reference_traj(0. + t_closed + i*DT*1.) for i in range(H+0+1)]
         # target_pos_tensor = jnp.array(target_pos_list)
-        target_pos_tensor = waypoint_generator.generate(jnp.array(self.obs_state()[:5]))
+        target_pos_tensor, kin_target_pos = waypoint_generator.generate(jnp.array(self.obs_state()[:5]))
         target_pos_list = np.array(target_pos_tensor)
         # print("Target pos: ",target_pos_list[:,3])
         dynamics.reset()
@@ -503,17 +503,20 @@ class CarNode(Node):
                 pickle.dump(stats, file)
             exit(0)
         else :
+            t1 = time.time()
             for model in models :
                 model = model.to(DEVICE)
-            action, mppi_info = mppi_torch(np.array(self.obs_state()), reward_track_fn(target_pos_tensor_torch, SPEED), vis_optim_traj=True, one_hot_delay=one_hot_delay.to(DEVICE))
+            action, mppi_info = mppi_torch(np.array(self.obs_state()), reward_track_fn(target_pos_tensor_torch, SPEED), vis_optim_traj=True, one_hot_delay=one_hot_delay.to(DEVICE),target_pos=kin_target_pos)
             for model in models :
                 model = model.to('cpu')
+            t2 = time.time()
+            # print("Time taken for MPPI: ", t2-t1)
         action = np.array(action)
         mppi_torch.feed_hist(torch.tensor(self.obs_state()).double().to(DEVICE),torch.tensor(action).double().to(DEVICE))
         sampled_traj = np.array(mppi_info['trajectory'][:, :2])
         
         px, py, psi, vx, vy, omega = self.obs_state().tolist()
-        print(px, py, psi, vx, vy, omega)
+        # print(px, py, psi, vx, vy, omega)
         lat_err = np.sqrt((target_pos_list[0,0]-px)**2 + (target_pos_list[0,1]-py)**2)
         stats['lat_errs'].append(lat_err)
         self.states.append([vx,vy,omega])
@@ -576,7 +579,10 @@ class CarNode(Node):
             nn_path.poses.append(pose)
         self.path_pub_nn.publish(nn_path)
         
-        if SIM == 'unity' :
+        if SIM == 'unity':
+            if self.i==1 :
+                action[0] = -3.
+                action[1] = -3.
             self.ackermann_msg.acceleration = float(action[0])
             self.ackermann_msg.steering_angle = float(action[1])
             self.unity_publisher_.publish(self.ackermann_msg)

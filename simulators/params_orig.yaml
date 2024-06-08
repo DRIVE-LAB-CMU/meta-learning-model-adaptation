@@ -1,10 +1,10 @@
 track_info:
-  centerline_file: "interpolated_traj.csv"
+  centerline_file: "new_traj.csv"
   track_width: 5.0
   texture_blend_factor: 0.9
   obs_density: 0.0
   vegetation_density: 0.0
-  offtrack_roughness: 0.000
+  offtrack_roughness: 0.00
   scale: 1.0
   ox: 200.0
   oy: 200.0
@@ -12,12 +12,12 @@ track_info:
 
 heightmap:
   filename: "heightmap.png"
-  scale: 0.00
+  scale: 0.0
 
 respawn_loc: 
-  x: 500.0
+  x: 200.0
   y: 10.0
-  z: 500.0
+  z: 200.0
   roll: 0
   pitch: 0
   yaw: 0
@@ -28,7 +28,7 @@ sensors:
   pose: true
   imu: true
 
-timescale: 50.0
+timescale: 1.0
 
 vehicle_params:
   m: 250.0
