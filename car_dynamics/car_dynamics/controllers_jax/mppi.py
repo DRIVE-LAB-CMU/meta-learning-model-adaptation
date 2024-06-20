@@ -38,6 +38,9 @@ class MPPIController(BaseController):
         self.nn_model = nn_model
         if rollout_fn_nn is None:
             self.rollout_fn_nn = rollout_fn
+            # print("Yess!!WTFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
+        else :
+            self.rollout_fn_nn = rollout_fn_nn
         self.rollout_fn = rollout_fn
         self.rollout_start_fn = rollout_start_fn
         self.key, _ = jax.random.split(key)

@@ -82,9 +82,9 @@ num_log = 0
 DT = 0.05
 
 car_state = dict(
-                    date=None,
-                    time=None, 
-                 vicon_loc=None,
+                date=None,
+                time=None, 
+                vicon_loc=None,
                 #  gps_vel=None,
                  left_rgb=None,
                  right_rgb=None,

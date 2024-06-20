@@ -31,7 +31,9 @@ import pickle
 import os
 from ackermann_msgs.msg import AckermannDrive
 import tf_transformations
-
+import socket
+import struct
+import threading
 print("DEVICE", jax.devices())
 
 DT = .1
@@ -44,16 +46,48 @@ LF = .16
 LR = .15
 L = LF+LR
 learning_rate = 0.0005
-trajectory_type = "counter oval"
 
+####### VICON Callback ####################
+vicon_loc = None
+def update_vicon():
+    server_ip = "0.0.0.0"
+    server_port = 12345
+
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    server_socket.bind((server_ip, server_port))
+
+    print(f"UDP server listening on {server_ip}:{server_port}")
+
+    server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 0)
+    while True :
+        data, addr = server_socket.recvfrom(24)  # 3 doubles * 8 bytes each = 24 bytes
+        unpacked_data = struct.unpack('ddd', data)
+        # print(f"Received pose from {addr}: {unpacked_data}")
+        vx_ = (unpacked_data[0]/1000. - pose_x)/(t_prev - time.time())
+        vy_ = (unpacked_data[1]/1000. - pose_y)/(t_prev - time.time())
+        vx = vx_*np.cos(pose_yaw) + vy_*np.sin(pose_yaw)
+        vy = -vx_*np.sin(pose_yaw) + vy_*np.cos(pose_yaw)
+        vyaw = (unpacked_data[2] - pose_yaw)/(t_prev - time.time())
+        t_prev = time.time()
+        pose_x = unpacked_data[0]/1000.
+        pose_y = unpacked_data[1]/1000.
+        pose_yaw = unpacked_data[2]
+
+        vicon_loc = [pose_x, pose_y, pose_yaw, vx, vy, vyaw]
+
+trajectory_type = "counter oval"
 # trajectory_type = "berlin_2018"
-SIM = 'numerical' # 'numerical' or 'unity'
+SIM = 'numerical' # 'numerical' or 'unity' or 'vicon'
+
+if SIM == 'vicon' :
+    vicon_thread = threading.Thread(target=update_vicon)
+    vicon_thread.start()
 
 if SIM=='unity' :
     trajectory_type = "params.yaml"
 
 if SIM == 'unity' :
-    SPEED = 10.
+    SPEED = 10.0
 else :
     SPEED = 2.2
 
@@ -263,7 +297,6 @@ mppi_torch = MPPIControllerTorch(
 
 
 dynamics_single = DynamicBicycleModel(model_params_single)
-env =OffroadCar({}, dynamics_single)
 
 rollout_fn = rollout_fn_select('dbm', dynamics, DT, L, LR)
 
@@ -303,8 +336,12 @@ waypoint_generator = WaypointGenerator(trajectory_type, DT, H, SPEED)
 done = False
 frames = []
 
-obs = env.reset()
-
+if SIM == 'numerical' :
+    env =OffroadCar({}, dynamics_single)
+    obs = env.reset()
+else :
+    obs = np.array([0.,0.,0.,0.,0.,0,])
+    
 goal_list = []
 target_list = []
 action_list = []
@@ -513,6 +550,7 @@ class CarNode(Node):
         self.cmds = []
         self.i = 0
         self.curr_t_counter = 0.
+        self.vicon_loc = np.array(vicon_loc)
     
     def obs_state(self):
         if SIM == 'unity' :
@@ -520,8 +558,10 @@ class CarNode(Node):
                 return np.array(self.unity_state)
             else :
                 return np.array([yaml_contents['respawn_loc']['z'], yaml_contents['respawn_loc']['x'], 0., 0., 0., 0.])
-        else :
+        elif SIM == 'numerical':
             return env.obs_state()
+        else :
+            return self.vicon_loc
     
     def timer_callback(self):
         t1 = time.time()
@@ -658,9 +698,11 @@ class CarNode(Node):
             self.ackermann_msg.steering_angle = float(action[1])
             self.unity_publisher_.publish(self.ackermann_msg)
             obs = np.array(self.unity_state)
-        else :
+        elif SIM == 'numerical':
             obs, reward, done, info = env.step(action)
-        
+        else :
+            obs = np.array(vicon_loc)
+            self.vicon_loc = np.array(vicon_loc)
         w_pred_ = 0.
         _w_pred = 0.
         if len(self.states) > stats['buffer']  :

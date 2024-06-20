@@ -100,7 +100,8 @@ model_params_single = DynamicParams(num_envs=1, DT=DT,Sa=0.36, Sb=-0., Ta=20., T
 stats = {'lat_errs': [], 'ws_gt': [], 'ws_': [], 'ws': [], 'losses': [], 'date_time': time.strftime("%m/%d/%Y %H:%M:%S"),'buffer': 100, 'lr': learning_rate, 'online_transition': 300, 'delay': DELAY, 'model': MODEL, 'speed': SPEED, 'total_length': 1500, 'history': HISTORY, 'params': model_params}
 for i in range(N_ensembles):
     stats['losses'+str(i)] = []
-    
+
+
 def convert_delay_to_onehot(delay, max_delay=MAX_DELAY):
     onehot = np.zeros((delay.shape[0],max_delay))
     inds = np.arange(delay.shape[0])

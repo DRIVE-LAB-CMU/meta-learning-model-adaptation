@@ -277,6 +277,7 @@ mppi_params = MPPIParams(
         smooth_alpha=1.,
 )
 
+print("Before?!!!!!!!!!!!!!!!!!")
 mppi = MPPIController(
     mppi_params, rollout_fn, fn, key, nn_model=model, rollout_fn_nn=rollout_fn_nn
 )
