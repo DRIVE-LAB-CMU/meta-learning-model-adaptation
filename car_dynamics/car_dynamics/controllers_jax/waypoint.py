@@ -107,7 +107,9 @@ class WaypointGenerator:
         self.last_i = -1
         
     
-    def generate(self, obs: jnp.ndarray) -> jnp.ndarray:
+    def generate(self, obs: jnp.ndarray, dt=-1) -> jnp.ndarray:
+        if dt < 0.:
+            dt = self.dt
         pos2d = obs[:2]
         psi = obs[2]
         vel2d = obs[3:5]
@@ -119,11 +121,11 @@ class WaypointGenerator:
             
             magic_factor = 1./1.2
             for i in range(self.H+1):
-                t = t_closed + i * self.dt * self.speed * magic_factor
-                t_1 = t + self.dt * self.speed * magic_factor
+                t = t_closed + i * dt * self.speed * magic_factor
+                t_1 = t + dt * self.speed * magic_factor
                 pos = self.fn(t)
                 pos_next = self.fn(t_1)
-                vel = (pos_next - pos) / self.dt
+                vel = (pos_next - pos) / dt
                 speed_ref = jnp.clip(jnp.linalg.norm(vel), .5, 100.)
                 psi = jnp.arctan2(pos_next[1] - pos[1], pos_next[0] - pos[0])
                 target_pos_list.append(jnp.array([pos[0], pos[1], psi, speed_ref]))
@@ -167,11 +169,11 @@ class WaypointGenerator:
             kin_pos, _ = self.fn(t_closed_refined+1.2*speed, self.path)
             for i in range(self.H+1):
                 # print(speed)
-                t = t_closed_refined + i * self.dt * speed
-                t_1 = t + self.dt * speed
+                t = t_closed_refined + i * dt * speed
+                t_1 = t + dt * speed
                 pos, speed = self.fn(t, self.path)
                 pos_next, _ = self.fn(t_1, self.path)
-                vel = (pos_next - pos) / self.dt
+                vel = (pos_next - pos) / dt
                 speed_ref = jnp.clip(jnp.linalg.norm(vel), .5, 100.)
                 # speed_ref = jnp.clip(jnp.linalg.norm(vel), .5, 100.)
                 psi = jnp.arctan2(pos_next[1] - pos[1], pos_next[0] - pos[0])

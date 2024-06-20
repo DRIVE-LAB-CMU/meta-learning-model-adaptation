@@ -31,6 +31,7 @@ class MPPIController(BaseController):
                 num_obs,
                 num_actions,
                 alpha,
+                lstm=False
     ):
         
         self.gamma_mean: float = gamma_mean
@@ -44,7 +45,7 @@ class MPPIController(BaseController):
         self.a_mean_init = a_mean[-1:]
         self.a_cov_init = a_cov[-1:]
         # self.a_init: torch.Tensor = ...
-        
+        self.lstm = lstm
         self.n_rollouts: int = n_rollouts
         self.H: int = H # horizon
         self.device = device
@@ -88,18 +89,9 @@ class MPPIController(BaseController):
     def _sample_actions(self, curr_state, target_pos):
         
         # st = time.time()
-        # action_dist = MultivariateNormal(loc=self.a_mean, covariance_matrix=self.a_cov)
-        act_mean = self.a_mean*0
-        steer_mean = self.pure_pursuit(curr_state, target_pos)
-        # print(act_mean.shape)
-        # act_mean[:, 1] = steer_mean
+        act_mean = self.a_mean
         action_dist = MultivariateNormal(loc=act_mean, covariance_matrix=self.a_cov)
-        # action_dist = Uniform(self.a_mean*0-1., self.a_mean*0+1.)
-        # print("torch sample time", time.time() - st)
         
-        # st = time.time()
-        # import pdb; pdb.set_trace()
-        # print(self.a_mean.device, self.a_cov.device)
         a_sampled = action_dist.sample((self.n_rollouts,))
         # import pdb; pdb.set_trace()
         for d in range(len(self.a_min)):
@@ -108,10 +100,19 @@ class MPPIController(BaseController):
         # print("clip time", time.time() - st)
         return a_sampled.to(self.device)
         
-    def _get_rollout(self, state_init, actions, fix_history=False, one_hot_delay=None, debug=False):
+    def _get_rollout(self, state_init, actions, fix_history=False, one_hot_delay=None, debug=False, h_0s=None, c_0s=None):
         
         # st = time.time()
         n_rollouts = actions.shape[0]
+        # h_0s = h_0s.repeat(n_rollouts,1,1)
+        if self.lstm :
+            for i in range(len(h_0s)):
+                h_0s[i] = h_0s[i].repeat(1, n_rollouts, 1)
+                c_0s[i] = c_0s[i].repeat(1, n_rollouts, 1)
+        # for c_0 in c_0s:
+        #     print("a", c_0.shape)
+        #     c_0 = c_0.repeat(n_rollouts, 1, 1)
+        #     print("b", c_0.shape)
         state = state_init.unsqueeze(0).repeat(n_rollouts, 1)
         state_list = [state]
         obs_history = self.state_hist.unsqueeze(0).repeat(n_rollouts, 1, 1)
@@ -134,8 +135,10 @@ class MPPIController(BaseController):
             # print(f"action shape, {a_rollout.shape}")
             # print("part 1", time.time() - st)
             # st = time.time()
-            if (step==4) and debug:
-                state, debug_info = self.rollout_fn(obs_history, state, a_rollout, True, one_hot_delay)
+            # print(one_hot_delay)
+            if self.lstm :
+                # print(h_0s[0])
+                state, debug_info = self.rollout_fn(obs_history, state, a_rollout, h_0s=h_0s, c_0s=c_0s)
             else :
                 state, debug_info = self.rollout_fn(obs_history, state, a_rollout, self.debug, one_hot_delay)
             # print("part 2", time.time() - st)
@@ -144,16 +147,19 @@ class MPPIController(BaseController):
                 self.x_all += debug_info['x'].tolist()
                 self.y_all += debug_info['y'].tolist()
             total_var += debug_info['var']
+            if self.lstm :
+                h_0s = debug_info['h_ns']
+                c_0s = debug_info['c_ns']
             state_list.append(state)
             # print("part 3", time.time() - st)
             # print("mppi inner loop", time.time() - st)
             # import pdb; pdb.set_trace()
             # reward_rollout += reward_fn(state, a_rollout) * (self.discount ** step)
-        # print("rollout_fn_end", time.time() - st)
         
         return state_list, total_var
     
     def feed_hist(self, obs, action):
+        
         state = torch.tensor(obs[:self.num_obs], device=self.device)
         action_tensor = torch.tensor(action[:self.num_actions], device=self.device)
         self.state_hist[:-1] = self.state_hist[1:].clone()
@@ -169,6 +175,8 @@ class MPPIController(BaseController):
         vis_all_traj = False,
         one_hot_delay = None,
         target_pos=None,
+        h_0s=None,
+        c_0s=None
     ):
         
         st_mppi = time.time()
@@ -208,7 +216,9 @@ class MPPIController(BaseController):
         # import pdb; pdb.set_trace()
         
         st = time.time()
-        state_list, total_var = self._get_rollout(state_init, a_sampled, self.fix_history, one_hot_delay) # List
+        # print(h_0s.shape,c_0s.shape)
+        # a_sampled[-1,:,1] = 1.
+        state_list, total_var = self._get_rollout(state_init, a_sampled, self.fix_history, one_hot_delay, h_0s=h_0s, c_0s=c_0s) # List
         
         
         # print("rollout_end", time.time() - st)
@@ -221,11 +231,17 @@ class MPPIController(BaseController):
         reward_rollout = reward_fn(state_list, a_sampled, self.discount) # Tensor
         cost_rollout = -reward_rollout + self.alpha * total_var/30.
 
-
+        # ind = torch.argmin(cost_rollout)
+        # print(f"min cost: {cost_rollout[ind]}")
+        # print("actions: ", a_sampled[ind, :, :])
+        # print("actions2: ", a_sampled[-1, :, :])
+        # print("states: ", torch.stack(state_list,dim=1)[ind,:,:])
+        # print("states2: ", torch.stack(state_list,dim=1)[-1,:,:])
+        # print(f"cost2: {cost_rollout[-1]}")
         cost_exp = torch.exp(-(cost_rollout - torch.min(cost_rollout)) / self.lam)
         weight = cost_exp / cost_exp.sum()
         # import pdb; pdb.set_trace()
-        # print("reward calc time", time.time() - st)
+        # print("reward calc + rollout time", time.time() - st)
         
         t_calc_reward = time.time() - st
         
@@ -266,14 +282,14 @@ class MPPIController(BaseController):
                     import pdb; pdb.set_trace()
                     
         # print("vis time", time.time() - st)
-        st = time.time()
         # import pdb; pdb.set_trace()
         # print(self.a_mean.shape)
+        st = time.time()
         actions = self.a_mean.detach()
         # print("SAMPLE END", time.time()-st)
         actions = actions.cpu()
-        # print("SAMPLE END", time.time()-st)
         actions = actions.numpy()
+        # print("SAMPLE END", time.time()-st)
         # print("SAMPLE END", time.time()-st)
         self.a_mean = torch.cat([self.a_mean[1:], self.a_mean[-1:]], dim=0)
         self.a_cov = torch.cat([self.a_cov[1:], self.a_cov[-1:]], dim=0)

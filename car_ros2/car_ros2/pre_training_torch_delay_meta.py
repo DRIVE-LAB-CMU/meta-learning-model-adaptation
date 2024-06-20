@@ -6,10 +6,10 @@ from nav_msgs.msg import Path
 from nav_msgs.msg import Odometry
 from visualization_msgs.msg import MarkerArray, Marker
 import random
-
+from copy import deepcopy
 import numpy as np
 import matplotlib.pyplot as plt
-
+import higher
 from tf_transformations import quaternion_from_euler, euler_matrix
 
 from car_dynamics.models_jax import DynamicBicycleModel, DynamicParams
@@ -46,7 +46,7 @@ args = parser.parse_args()
 
 filename = 'losses/'+args.exp_name+'.txt'
 DT = .05
-N_ROLLOUTS = 100
+N_ROLLOUTS = 10
 var_params = args.var
 if not var_params :
     N_ROLLOUTS = 10000
@@ -55,12 +55,14 @@ SIGMA = 1.0
 LF = .16
 LR = .15
 L = LF+LR
-learning_rate = 0.002
+learning_rate = 0.0005
+g_learning_rate = 0.0005
+N_INNER_ITERS = 100
 trajectory_type = "counter oval"
 losses = []
 SPEED = 2.2
-batch_size = 64
-N_ensembles = 3
+batch_size = 1
+N_ensembles = 1
 # DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 DEVICE = "cuda:0"
 MAX_DELAY = 7
@@ -72,6 +74,10 @@ AUGMENT = False
 HISTORY = 8
 ART_DELAY = 0
 append_delay_type = "OneHot" # From "None", "Single", "OneHot"
+
+# meta params
+leave_out = 5
+
 
 def convert_delay_to_onehot(delay, max_delay=MAX_DELAY):
     onehot = np.zeros((delay.shape[0],max_delay))
@@ -152,7 +158,7 @@ elif MODEL == 'nn-lstm' :
 # Check if file exist, if yes, then load the model
 for i in range(N_ensembles):
     if os.path.exists(filename[:-4]+str(i)+'.pth'):
-        models[i].load_state_dict(torch.load(filename[:-4]+str(i)+'.pth'))
+        models[i].load_state_dict(torch.load(filename[:-4]+str(i)+'_.pth'))
     # model.load_state_dict(torch.load(filename[:-4]+'.pth'))
     # model_delay.load_state_dict(torch.load(filename[:-4]+'_delay.pth'))
 
@@ -165,7 +171,7 @@ criterion_delay = nn.CrossEntropyLoss()
 print(model.fc)
 optimizers = []
 for i in range(N_ensembles):
-    optimizer = optim.SGD(models[i].parameters(), lr=learning_rate)
+    optimizer = optim.SGD(models[i].parameters(), lr=g_learning_rate)
     optimizers.append(optimizer)
 optimizer_delay = optim.SGD(model_delay.parameters(), lr=1e-3)
 model_delay = model_delay.double()
@@ -243,6 +249,47 @@ def train_X(X, Y) :
         loss.backward()
         optimizer.step()
     return
+
+def train_X_meta(Xs, Ys) :
+    global models, stats, model_delay
+    # Zero the parameter gradients
+    # print("Huh?")
+    # Forward pass
+    j = 0
+    for model in models :
+        optimizer = optimizers[j]
+        # model.train()
+        # model.zero_grad()
+        optimizer.zero_grad()
+        for X, Y in zip(Xs,Ys) :
+            # Y = torch.tensor(Y)
+            with higher.innerloop_ctx(
+                model, optimizer, copy_initial_weights=False
+            ) as (model_local, optimizer_local):
+                for t in range(N_INNER_ITERS):
+                    # Inner loop
+                    # optimizer_local.zero_grad()
+                    outputs = model_local(X[:-leave_out])
+                    loss = criterion(outputs, Y[:-leave_out]/DT)
+                    # loss.backward()
+                    optimizer_local.step(loss)
+                # optimizer_local.zero_grad()
+                outputs = model_local(X)#[-leave_out:])
+                loss = criterion(outputs, Y/DT)
+                # print(float(loss.item()))
+                if float(loss.item()) < 1e9:
+                    stats['losses' + str(j)].append(float(loss.item()))
+                    loss.backward()
+                    # for p_global, p_local in zip(model.parameters(), model_local.parameters()):
+                    #     # print(p_global.grad, p_local.grad/len(Xs))
+                    #     if p_global.grad is None:
+                    #         p_global.grad = p_local.grad/(len(Xs))
+                    #     else :
+                    #         p_global.grad += p_local.grad/(len(Xs))  
+        optimizer.step()
+        j += 1
+    return
+
 
 def acc_X_lstm(states,cmds,art_delay=ART_DELAY) :
     global model, stats
@@ -475,20 +522,25 @@ for epoch in range(n_epochs):
             Wt = torch.cat(wts,dim=0)
         # print(Y.shape,Ys[0].shape)
         if MODEL == 'nn' :
-            train_X(X,Y)
+            # train_X(X,Y)
+            
+            train_X_meta(Xs,Ys)
         elif MODEL == 'nn-lstm' :
             train_X_lstm(X,Y,Wt)
-        
-        if (j//batch_size)%(1000//batch_size)==0 :
+        if (j//batch_size)%(100//batch_size)==0 :
             for k in range(N_ensembles):
+                # print(stats['losses'+str(k)][-1000:])
                 print("Model",str(k),"Epoch",epoch,"Loss",np.mean(stats['losses'+str(k)][-1000:]))
             # print("Epoch",epoch,"Loss",np.mean(stats['losses'][-1000:]))
             # print("Epoch",epoch,"Losses delay",np.mean(stats['losses_delay'][-data_states.shape[1]//10:]))
-    losses.append(np.mean(stats['losses'][-data_states.shape[1]:]))
-    if epoch>2 and epoch%3==0 :
+            for k in range(N_ensembles):
+                torch.save(models[k].state_dict(), filename[:-4]+str(k)+'_.pth')
+        
+        losses.append(np.mean(stats['losses'+str(0)][-data_states.shape[1]:]))
+    # if epoch>2 and epoch%3==0 :
         # print(model.fc[0].weight.data)
-        for k in range(N_ensembles):
-            torch.save(models[k].state_dict(), filename[:-4]+str(k)+'.pth')
+        # for k in range(N_ensembles):
+        #     torch.save(models[k].state_dict(), filename[:-4]+str(k)+'.pth')
         # torch.save(model.state_dict(), filename[:-4]+'.pth')
         # torch.save(model_delay.state_dict(), filename[:-4]+'_delay.pth')
 np.savetxt(filename, losses)

@@ -34,9 +34,9 @@ def reward_track_fn(goal_list: torch.Tensor, defaul_speed: float):
             vel_diff = torch.abs(state_step[:, 3] - goal_list[h+1, 3]) * (state_step[:, 3] > goal_list[h+1, 3])
             vel_diff += torch.abs(state_step[:, 3] - 0.5) * (state_step[:, 3] < 0.5)
             if h > 0 :
-                reward = -dist - 3. * vel_diff - 0.0 * torch.norm(action_step[:, 1:2], dim=1) #- 10.*torch.norm(action_step-prev_action_step,dim=1)
+                reward = -dist*10. - 3. * vel_diff - 0.0 * torch.norm(action_step[:, 1:2], dim=1) #- 10.*torch.norm(action_step-prev_action_step,dim=1)
             else :
-                reward = -dist - 3. * vel_diff - 0.0 * torch.norm(action_step[:, 1:2], dim=1)
+                reward = -dist*10. - 3. * vel_diff - 0.0 * torch.norm(action_step[:, 1:2], dim=1)
             # reward = - 0.4 * dist - 0.0 * torch.norm(action_step, dim=1) - 0.0 * vel_diff - 0.1 * torch.log(1 + dist)
             # reward = - 0.4 * dist
             reward_rollout += reward *(discount ** h) * reward_activate
@@ -159,6 +159,43 @@ def rollout_fn_select(model_struct, models, dt, L, LR, n_ensembles=3):
         # print(next_state.shape)
         return next_state, {'var': varX}
     
+    def rollout_fn_nn_lstm(obs_history, state, action, h_0s=None, c_0s=None):
+        assert state.shape[1] == 6
+        assert action.shape[1] == 2
+        X = torch.concat((state[:,3:], action),dim=1).double().unsqueeze(1)
+        next_state = torch.tensor(state)
+        # gradX = 0.
+        outs = []
+        h_ns = []
+        c_ns = []
+        for i in range(len(models)):
+            model = models[i]        
+            # gradX += model(X).detach()
+            # print(X.shape,h_0s[i].shape,c_0s[i].shape)
+            out, (h_n,c_n) = model(X,h_0=h_0s[i],c_0=c_0s[i])
+            h_ns.append(h_n)
+            c_ns.append(c_n)
+            outs.append(out.detach()[:,-1])
+        outs = torch.stack(outs,dim=0)
+        # print(outs.shape)
+        gradX = torch.mean(outs,dim=0)
+        if outs.shape[0] > 1:
+            varX = torch.sum(torch.var(outs,dim=0),dim=1)
+        else :
+            varX = torch.zeros(state.shape[0]).to(state.device)
+        # print(torch.min(gradX[:,2]), torch.max(gradX[:,2]), torch.mean(gradX[:,2]))
+        next_state[:,3] += gradX[:,0] * dt
+        next_state[:,4] += gradX[:,1] * dt
+        next_state[:,5] += gradX[:,2] * dt
+        next_state[:,2] += state[:,5] * dt
+        # next_state = normalize_angle_tensor(next_state,idx=2)
+        next_state[:,0] += state[:,3] * torch.cos(state[:,2]) * dt - state[:,4] * torch.sin(state[:,2]) * dt
+        next_state[:,1] += state[:,3] * torch.sin(state[:,2]) * dt + state[:,4] * torch.cos(state[:,2]) * dt
+        
+        # next_state = next_state[:, :4]
+        # print(next_state.shape)
+        return next_state, {'var': varX, 'h_ns': h_ns, 'c_ns': c_ns}
+    
     def rollout_fn_nn_phyx_kbm(obs_history, last_state, action, debug=False):
         model = models[0]
         n_rollouts = action.shape[0]
@@ -207,6 +244,8 @@ def rollout_fn_select(model_struct, models, dt, L, LR, n_ensembles=3):
         return rollout_fn_nn_end2end
     elif model_struct == 'nn':
         return rollout_fn_nn
+    elif model_struct == 'nn-lstm':
+        return rollout_fn_nn_lstm
     elif model_struct == 'kbm':
         return rollout_fn_kbm
     elif model_struct == 'dbm':
