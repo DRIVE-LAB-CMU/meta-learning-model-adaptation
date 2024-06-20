@@ -36,9 +36,9 @@ import struct
 import threading
 print("DEVICE", jax.devices())
 
-DT = .1
-DT_torch = 0.1
-DELAY = 3
+DT = 0.07
+DT_torch = 0.07
+DELAY = 4
 N_ROLLOUTS = 10000
 H = 8
 SIGMA = 1.0
@@ -162,7 +162,7 @@ if args.exp_name == 'none' :
 else :
     exp_name = args.exp_name
 
-print(args.exp_name,exp_name)
+# print(args.exp_name,exp_name)
 dynamics = DynamicBicycleModel(model_params)
 
 class LSTMModel(nn.Module):
@@ -256,7 +256,7 @@ if args.pre:
         post = '_lstm'
     for i in range(N_ensembles):
         print('losses/none'+post+str(i)+'.pth')
-        models[i].load_state_dict(torch.load('losses/none'+post+str(i)+'.pth'))
+        models[i].load_state_dict(torch.load('losses/none'+post+str(i)+'_.pth'))
     
     # model_delay.load_state_dict(torch.load('losses/exp1.pth'))
 else :

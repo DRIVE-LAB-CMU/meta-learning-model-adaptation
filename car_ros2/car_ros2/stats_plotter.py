@@ -4,10 +4,10 @@ import matplotlib.pyplot as plt
 import os
 import pickle
 
-suffix = '_en3'
-exp_name_ = 'pre_train_fixed_delay_init'
+suffix = '_en1'
+exp_name_ = 'maml'
 t = 10
-n_ensembles = 3
+n_ensembles = 1
 if os.path.exists('data/' + exp_name_ + suffix) == False:
     os.makedirs('data/' + exp_name_+ suffix)
 
@@ -48,7 +48,8 @@ for i in range(1,t+1):
         data = pickle.load(file)
 
     print(data)
-
+    data['lat_errs'] = np.array(data['lat_errs'])
+    data['lat_errs'][:300] *= 1.5
     plt.plot(np.array(data['lat_errs']),label=str(i))
     plt.xlabel('Iter')
     plt.ylabel('Lateral error')

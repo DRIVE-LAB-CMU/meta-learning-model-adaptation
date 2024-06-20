@@ -4,7 +4,7 @@ track_info:
   texture_blend_factor: 0.9
   obs_density: 0.0
   vegetation_density: 0.0
-  offtrack_roughness: 0.00
+  offtrack_roughness: 0.0
   scale: 1.0
   ox: 200.0
   oy: 200.0
