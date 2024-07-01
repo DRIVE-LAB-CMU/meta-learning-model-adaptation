@@ -20,12 +20,13 @@ def reward_track_fn(goal_list: torch.Tensor, defaul_speed: float):
             
             state_step = state[h+1]
             action_step = action[:, h]
-            # if h>0:
-            #     prev_action_step = action[:, h-1]
+            if h>0:
+                prev_action_step = action[:, h-1]
             # 
             # import pdb; pdb.set_trace()
             dist = torch.norm(state_step[:, :2] - goal_list[h+1, :2], dim=1)**2
-            
+            theta = state_step[:,2]
+            theta_diff = torch.atan2(torch.sin(theta - goal_list[h+1, 2]), torch.cos(theta - goal_list[h+1, 2]))
             # vel_direction = state[h][:,:2] - state[h-1][:,:2]
             # pos_direction = - state[h][:,:2] + goal_list[h, :2] 
             # dot_product = (vel_direction * pos_direction).sum(dim=1)
@@ -34,9 +35,9 @@ def reward_track_fn(goal_list: torch.Tensor, defaul_speed: float):
             vel_diff = torch.abs(state_step[:, 3] - goal_list[h+1, 3]) * (state_step[:, 3] > goal_list[h+1, 3])
             vel_diff += torch.abs(state_step[:, 3] - 0.5) * (state_step[:, 3] < 0.5)
             if h > 0 :
-                reward = -dist*10. - 3. * vel_diff - 0.0 * torch.norm(action_step[:, 1:2], dim=1) #- 10.*torch.norm(action_step-prev_action_step,dim=1)
+                reward = -dist - 3. * vel_diff - 0.0 * torch.norm(action_step[:, 1:2], dim=1) -3.*theta_diff**2 #- 10.*torch.norm(action_step-prev_action_step,dim=1)
             else :
-                reward = -dist*10. - 3. * vel_diff - 0.0 * torch.norm(action_step[:, 1:2], dim=1)
+                reward = -dist - 3. * vel_diff - 0.0 * torch.norm(action_step[:, 1:2], dim=1) -3.*theta_diff**2
             # reward = - 0.4 * dist - 0.0 * torch.norm(action_step, dim=1) - 0.0 * vel_diff - 0.1 * torch.log(1 + dist)
             # reward = - 0.4 * dist
             reward_rollout += reward *(discount ** h) * reward_activate

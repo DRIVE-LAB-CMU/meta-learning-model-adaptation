@@ -1,11 +1,16 @@
 track_info:
   centerline_file: "new_traj.csv"
-  track_width: 5.0
+  track_width: 10.0
+  track_texture: "road" # sand, mud, grass or road
   texture_blend_factor: 0.9
   obs_density: 0.0
   vegetation_density: 0.0
   offtrack_roughness: 0.0
+  ontrack_roughness: 0.0000
   scale: 1.0
+  right_fence: true
+  left_fence: false
+  fence_height: 5.0 # in meters
   ox: 200.0
   oy: 200.0
   bush_demarcation: 0.

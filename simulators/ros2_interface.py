@@ -26,12 +26,17 @@ import tf2_ros
 from sensor_msgs.msg import LaserScan
 from sensor_msgs.msg import PointCloud2, PointField
 import math
+import os
 
 steer_cmd = 0
 throttle_cmd = 0
 SYNC = True
 DELAY = 0
-N_ACTIONS_PER_STEP = 1
+N_ACTIONS_PER_STEP = 2
+track_type = 'circuit_kart' # from circuit, oval, mars, grass, mud, circuit_decay, circuit_kart
+
+# Copy params-{track_type}.yaml to params.yaml
+os.system(f'cp params-{track_type}.yaml params.yaml')
 
 def quaternion_to_euler(quat):
     x, y, z, w = quat
@@ -67,7 +72,7 @@ class CarController(Node):
             10)
         engineConfigChannel = EngineConfigurationChannel()
         self.publisher_img = self.create_publisher(Image_ros, 'front_camera', 10)
-        self.env = UnityEnvironment(file_name="ros2-env-v2/sim", seed=1,worker_id=0,log_folder='logs/', side_channels=[engineConfigChannel])
+        self.env = UnityEnvironment(file_name="ros2-env-v4/sim", seed=1,worker_id=0,log_folder='logs/', side_channels=[engineConfigChannel])
         engineConfigChannel.set_configuration_parameters(quality_level=1, target_frame_rate=-1, capture_frame_rate=60)
 # ,)#,no_graphics=True)
         # print("Started?")
@@ -220,13 +225,13 @@ class CarController(Node):
         msg_accel.accel.linear.x = float(env_info[0].obs[-1][0][12])
         msg_accel.accel.linear.y = float(env_info[0].obs[-1][0][13])
         msg_accel.accel.linear.z = float(env_info[0].obs[-1][0][14])
-        
+        # print(msg_pose.pose.position.x,msg_pose.pose.position.z,msg_twist.twist.linear.x,msg_twist.twist.linear.z)
         # Publish transform from map to base_link
         transform = TransformStamped()
         transform.header.stamp = self.get_clock().now().to_msg()
         transform.header.frame_id = "map"
         transform.child_frame_id = "base_link"
-        transform.transform.translation.x = msg_pose.pose.position.x-500.
+        transform.transform.translation.x = msg_pose.pose.position.x - 500.
         transform.transform.translation.y = msg_pose.pose.position.z - 20.
         transform.transform.translation.z = msg_pose.pose.position.y
         transform.transform.rotation.x = qx
@@ -235,47 +240,47 @@ class CarController(Node):
         transform.transform.rotation.w = qw
         self.tf_broadcaster.sendTransform(transform)
 
-        ranges = [0.]*91
-        for i in range(46):
-            ranges[45+i] = 4.*float(env_info[0].obs[self.base_idx][0][4*i+1])
-            if i==0 :
-                continue
-            ranges[45-i] = 4.*float(env_info[0].obs[self.base_idx][0][4*i-1])
+        # ranges = [0.]*91
+        # for i in range(46):
+        #     ranges[45+i] = 4.*float(env_info[0].obs[self.base_idx][0][4*i+1])
+        #     if i==0 :
+        #         continue
+        #     ranges[45-i] = 4.*float(env_info[0].obs[self.base_idx][0][4*i-1])
         
-        # for i in range(18):
-        #     print(i,len(env_info[0].obs[i+1][0]))
+        # # for i in range(18):
+        # #     print(i,len(env_info[0].obs[i+1][0]))
         
-        pcl = []
-        self.publish_image(np.array(env_info[0].obs[0][0]))
-        avg_ds = []
-        inds = np.array([0,8,9,10,11,12,13,14,15,1,2,3,4,5,6,7]) + 1 # 1-based indexing
-        for k in range(16) :
-            a = (-15. + 2*k)*math.pi/180.
-            j = inds[k]
-            # print(a)
-            ds = []
-            for i in range(46):
-                t = (90-2*i)*math.pi/180.
-                d = 4.*float(env_info[0].obs[j][0][4*i+1])
-                y = d*math.cos(t)*math.cos(a)
-                x = d*math.sin(t)*math.cos(a)
-                z = d*math.sin(a)
-                pcl.append([x,y,z,1.])
-                ds.append(d)
-                if i == 0:
-                    continue
-                t = (90+2*i)*math.pi/180.
-                d = 4.*float(env_info[0].obs[j][0][4*i-1])
-                y = d*math.cos(t)*math.cos(a)
-                x = d*math.sin(t)*math.cos(a)
-                z = d*math.sin(a)
-                pcl.append([x,y,z,1.])
-                ds.append(d)
-            avg_ds.append(np.mean(ds))
+        # pcl = []
+        # self.publish_image(np.array(env_info[0].obs[0][0]))
+        # avg_ds = []
+        # inds = np.array([0,8,9,10,11,12,13,14,15,1,2,3,4,5,6,7]) + 1 # 1-based indexing
+        # for k in range(16) :
+        #     a = (-15. + 2*k)*math.pi/180.
+        #     j = inds[k]
+        #     # print(a)
+        #     ds = []
+        #     for i in range(46):
+        #         t = (90-2*i)*math.pi/180.
+        #         d = 4.*float(env_info[0].obs[j][0][4*i+1])
+        #         y = d*math.cos(t)*math.cos(a)
+        #         x = d*math.sin(t)*math.cos(a)
+        #         z = d*math.sin(a)
+        #         pcl.append([x,y,z,1.])
+        #         ds.append(d)
+        #         if i == 0:
+        #             continue
+        #         t = (90+2*i)*math.pi/180.
+        #         d = 4.*float(env_info[0].obs[j][0][4*i-1])
+        #         y = d*math.cos(t)*math.cos(a)
+        #         x = d*math.sin(t)*math.cos(a)
+        #         z = d*math.sin(a)
+        #         pcl.append([x,y,z,1.])
+        #         ds.append(d)
+        #     avg_ds.append(np.mean(ds))
 
-        # print(avg_ds)
-        self.publish_pcl(np.array(pcl).astype(np.float32))
-        self.publish_scan(ranges)
+        # # print(avg_ds)
+        # self.publish_pcl(np.array(pcl).astype(np.float32))
+        # self.publish_scan(ranges)
         # print(steer_cmd,throttle_cmd)
 
         if SYNC:
@@ -285,10 +290,12 @@ class CarController(Node):
                 if len(self.cmd_buffer) > 1:
                     self.cmd_buffer[1:] = self.cmd_buffer[:-1]
                 actions = ActionTuple(np.array([[steer_cmd,throttle_cmd]]),None)
+                t1 = time.time()
                 for j in range(N_ACTIONS_PER_STEP) :
                     self.env.set_actions(self.behavior_name, actions)
                     self.env.step()
-                    
+                t2 = time.time()
+                print("time taken: ", t2-t1)
                 self.publisher_pose.publish(msg_pose)
                 self.publisher_twist.publish(msg_twist)
                 self.publisher_accel.publish(msg_accel)
@@ -318,7 +325,6 @@ class CarController(Node):
         # if self.i > 200:
         #     self.i = 0
         #     self.env.reset()
-        
 
 def main(args=None):
     rclpy.init(args=args)

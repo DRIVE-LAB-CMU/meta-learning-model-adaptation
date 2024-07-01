@@ -29,7 +29,7 @@ def reward_track_fn(goal_list: jnp.ndarray, defaul_speed: float):
             # dot_product = (vel_direction * pos_direction).sum(dim=1)
             # cos_angle = dot_product / (jnp.norm(pos_direction, dim=1) * jnp.norm(vel_direction, dim=1) + 1e-7)
             vel_diff = jnp.linalg.norm(state_step[:, 3:4] - defaul_speed, axis=1)
-            reward = -dist - 0.0 * vel_diff - 0.0 * jnp.linalg.norm(action_step[:, 1:2], axis=1)
+            reward = -dist/10. - 0.0 * vel_diff - 0.0 * jnp.linalg.norm(action_step[:, 1:2], axis=1)
             # reward = - 0.4 * dist - 0.0 * jnp.norm(action_step, dim=1) - 0.0 * vel_diff - 0.1 * jnp.log(1 + dist)
             # reward = - 0.4 * dist
             reward_rollout += reward *(discount ** h) * reward_activate

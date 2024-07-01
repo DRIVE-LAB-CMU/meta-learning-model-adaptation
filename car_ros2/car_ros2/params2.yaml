@@ -1,0 +1,54 @@
+track_info:
+  centerline_file: "berlin_2018-large"
+  track_width: 10.0
+  texture_blend_factor: 0.9
+  obs_density: 0.0
+  vegetation_density: 0.2
+  offtrack_roughness: 0.000
+  scale: 1.0
+  ox: 200.0
+  oy: 200.0
+  bush_demarcation: 0.5
+
+heightmap:
+  filename: "heightmap.png"
+  scale: 0.00
+
+respawn_loc: 
+  x: 200.0
+  y: 10.0
+  z: 200.0
+  roll: 0
+  pitch: 0
+  yaw: 0
+
+sensors:
+  lidar: true
+  camera: true
+  pose: true
+  imu: true
+
+timescale: 1.0
+
+vehicle_params:
+  m: 250.0
+  I: 300.0
+  max_steer: 0.6
+  Lf: 1.0
+  Lr: 1.0
+  K_cmd: 3000.0
+  K_v: 100.0
+  K_brake: 3000.0
+  K_aero: 3.0
+  mu_f: 1.5
+  mu_r: 1.5
+  g: 9.81
+  h_cg: 0.0
+  Cf: 1.0
+  Cr: 1.0
+  Bf: 30.0
+  Br: 30.0
+  K_steer: 1.0
+  K_friction: 0.0
+  delay: 0
+  v_kin: 2.5

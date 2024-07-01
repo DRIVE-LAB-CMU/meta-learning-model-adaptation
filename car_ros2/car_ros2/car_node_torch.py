@@ -19,7 +19,7 @@ from car_dynamics.controllers_torch import reward_track_fn, MPPIController as MP
 from car_dynamics.controllers_jax import MPPIController, MPPIParams, rollout_fn_select
 from car_dynamics.envs.car3 import OffroadCar
 from car_dynamics.controllers_jax import WaypointGenerator
-from std_msgs.msg import Float64
+from std_msgs.msg import Float64, Int8
 import torch.nn as nn
 import torch.optim as optim
 import torch
@@ -42,10 +42,11 @@ DELAY = 4
 N_ROLLOUTS = 10000
 H = 8
 SIGMA = 1.0
-LF = .16
-LR = .15
+LF = 1.6
+LR = 1.5
 L = LF+LR
-learning_rate = 0.0005
+learning_rate = 0.00001
+i_start = 60
 
 ####### VICON Callback ####################
 vicon_loc = None
@@ -77,14 +78,14 @@ def update_vicon():
 
 trajectory_type = "counter oval"
 # trajectory_type = "berlin_2018"
-SIM = 'numerical' # 'numerical' or 'unity' or 'vicon'
+SIM = 'unity' # 'numerical' or 'unity' or 'vicon'
 
 if SIM == 'vicon' :
     vicon_thread = threading.Thread(target=update_vicon)
     vicon_thread.start()
 
 if SIM=='unity' :
-    trajectory_type = "params.yaml"
+    trajectory_type = "../../simulators/params.yaml"
 
 if SIM == 'unity' :
     SPEED = 10.0
@@ -138,10 +139,12 @@ if SIM == 'unity' :
     model_params.Sa = yaml_contents['vehicle_params']['max_steer']
     model_params.Sb = 0.
     model_params.mu = yaml_contents['vehicle_params']['mu_f']
+    decay_start = yaml_contents['vehicle_params']['friction_decay_start']
+    decay_rate = yaml_contents['vehicle_params']['friction_decay_rate']
 
 
-model_params_single = DynamicParams(num_envs=1, DT=DT,Sa=0.36, Sb=-0., Ta=20., Tb=.0, mu=0.5,delay=DELAY)#random.randint(1,5))
-stats = {'lat_errs': [], 'ws_gt': [], 'ws_': [], 'ws': [], 'losses': [], 'date_time': time.strftime("%m/%d/%Y %H:%M:%S"),'buffer': 100, 'lr': learning_rate, 'online_transition': 300, 'delay': DELAY, 'model': MODEL, 'speed': SPEED, 'total_length': 1000, 'history': HISTORY, 'params': model_params}
+model_params_single = DynamicParams(num_envs=1, DT=DT,Sa=0.34, Sb=-0., Ta=20., Tb=.0, mu=0.5,delay=DELAY)#random.randint(1,5))
+stats = {'lat_errs': [], 'ws_gt': [], 'ws_': [], 'ws': [], 'losses': [], 'date_time': time.strftime("%m/%d/%Y %H:%M:%S"),'buffer': 100, 'lr': learning_rate, 'online_transition': 250, 'delay': DELAY, 'model': MODEL, 'speed': SPEED, 'total_length': 3000, 'history': HISTORY, 'params': model_params}
 for i in range(N_ensembles):
     stats['losses'+str(i)] = []
     
@@ -256,7 +259,7 @@ if args.pre:
         post = '_lstm'
     for i in range(N_ensembles):
         print('losses/none'+post+str(i)+'.pth')
-        models[i].load_state_dict(torch.load('losses/none'+post+str(i)+'_.pth'))
+        models[i].load_state_dict(torch.load('losses/none'+post+str(i)+'.pth'))
     
     # model_delay.load_state_dict(torch.load('losses/exp1.pth'))
 else :
@@ -275,7 +278,7 @@ mppi_torch = MPPIControllerTorch(
         lam = 0.01,
         a_mean=torch.zeros(H, 2, device=DEVICE),
         a_cov = a_cov_init.to(DEVICE),
-        n_rollouts=N_ROLLOUTS//4,
+        n_rollouts=N_ROLLOUTS//30,
         H=H,
         device=DEVICE,
         rollout_fn=rollout_fn_torch,
@@ -337,10 +340,10 @@ done = False
 frames = []
 
 if SIM == 'numerical' :
-    env =OffroadCar({}, dynamics_single)
+    env = OffroadCar({}, dynamics_single)
     obs = env.reset()
 else :
-    obs = np.array([0.,0.,0.,0.,0.,0,])
+    obs = np.array([yaml_contents['respawn_loc']['z'], yaml_contents['respawn_loc']['x'],0.,0.,0.,0.,])
     
 goal_list = []
 target_list = []
@@ -450,8 +453,7 @@ def train_step(states,cmds,augment=True,art_delay=ART_DELAY,one_hot_delay=None,p
         optimizer = optimizers[i]
         model = models[i]
     
-        if not args.lstm:
-            
+        if not args.lstm:        
             X_ = np.concatenate((np.array(states),np.array(cmds)),axis=1)[:-1]
             Y_ = (np.array(states)[1:] - np.array(states)[:-1])
             X = []
@@ -522,6 +524,7 @@ def train_step(states,cmds,augment=True,art_delay=ART_DELAY,one_hot_delay=None,p
         return h_ns, c_ns
     return
 
+curr_steer = 0.
 class CarNode(Node):
     def __init__(self):
         super().__init__('car_node')
@@ -537,6 +540,7 @@ class CarNode(Node):
         self.steer_pub_ = self.create_publisher(Float64, 'steer', 1)
         self.trajectory_array_pub_ = self.create_publisher(MarkerArray, 'trajectory_array', 1)
         self.body_pub_ = self.create_publisher(PolygonStamped, 'body', 1)
+        self.status_pub_ = self.create_publisher(Int8, 'status', 1)
         if SIM == 'unity' :
             self.unity_publisher_ = self.create_publisher(AckermannDrive, '/cmd', 10)
             self.ackermann_msg = AckermannDrive()
@@ -545,17 +549,47 @@ class CarNode(Node):
             self.unity_state = [yaml_contents['respawn_loc']['z'], yaml_contents['respawn_loc']['x'],0.,0.,0.,0.]
             self.pose_received = True
             self.vel_received = True
+            self.mu_factor_pub_ = self.create_publisher(Float64, 'mu_factor', 1)
+            
         
         self.states = []
         self.cmds = []
         self.i = 0
         self.curr_t_counter = 0.
         self.vicon_loc = np.array(vicon_loc)
+        self.unity_state_new = [0.,0.,0.,0.,0.,0.]
+    
+    def unity_callback(self, msg):
+        px = msg.pose.position.z
+        py = msg.pose.position.x
+        q = [msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w]
+        R = tf_transformations.quaternion_matrix(q)[:3, :3]
+        t = np.array([0.0, 0.0, 1.0])
+        Rt = np.dot(R, t)
+        # print(Rt)
+        # np.arctan2(Rt[0], Rt[2])
+        psi = np.arctan2(Rt[0], Rt[2])
+        
+        # print("psi: ", psi)
+        self.unity_state[0] = px
+        self.unity_state[1] = py
+        self.unity_state[2] = psi
+        self.pose_received = True
+    
+    def unity_twist_callback(self, msg):
+        vx = msg.twist.linear.z
+        vy = msg.twist.linear.x
+        omega = msg.twist.angular.y
+        # print(vx,vy,omega)
+        self.unity_state[3] = vx
+        self.unity_state[4] = vy
+        self.unity_state[5] = omega
+        self.vel_received = True
     
     def obs_state(self):
         if SIM == 'unity' :
             if self.pose_received and self.vel_received :
-                return np.array(self.unity_state)
+                return np.array(self.unity_state_new)
             else :
                 return np.array([yaml_contents['respawn_loc']['z'], yaml_contents['respawn_loc']['x'], 0., 0., 0., 0.])
         elif SIM == 'numerical':
@@ -564,28 +598,50 @@ class CarNode(Node):
             return self.vicon_loc
     
     def timer_callback(self):
-        t1 = time.time()
+        ti = time.time()
         print(self.i)
-        global obs, target_list_all, stats, h_0s, c_0s
+        global obs, target_list_all, stats, h_0s, c_0s, action, curr_steer
         if SIM == 'unity' and not self.pose_received :
             return
         if SIM == 'unity' and not self.vel_received :
             return
         
         self.i += 1
+        mu_factor = 1.
+        if self.i*DT > decay_start :
+            mu_factor = 1. - (self.i*DT - decay_start)*decay_rate
+        mu_msg = Float64()
+        mu_msg.data = mu_factor
+        self.mu_factor_pub_.publish(mu_msg)
         # distance_list = np.linalg.norm(waypoint_list - obs[:2], axis=-1)
         # # import pdb; pdb.set_trace()
         # t_idx = np.argmin(distance_list)
         # t_closed = waypoint_t_list[t_idx]
         # target_pos_list = [reference_traj(0. + t_closed + i*DT*1.) for i in range(H+0+1)]
         # target_pos_tensor = jnp.array(target_pos_list)
+        if SIM == 'unity':
+            if self.i==1 :
+                action = np.array([0.,0.])
+                action[0] = -3.
+                action[1] = -3.
+            self.unity_state_new = self.unity_state.copy()
+            obs = np.array(self.unity_state)
+            self.ackermann_msg.acceleration = float(action[0])
+            self.ackermann_msg.steering_angle = float(action[1])
+            self.unity_publisher_.publish(self.ackermann_msg)
+        ta = time.time()
+        status = Int8()
         if self.i < stats['online_transition'] :
-            target_pos_tensor = waypoint_generator.generate(jnp.array(obs[:5]))
+            target_pos_tensor, _ = waypoint_generator.generate(jnp.array(obs[:5]),mu_factor=mu_factor,dt=DT_torch)
         else :
-            target_pos_tensor = waypoint_generator.generate(jnp.array(obs[:5]),dt=DT_torch)
+            target_pos_tensor, _ = waypoint_generator.generate(jnp.array(obs[:5]),dt=DT_torch,mu_factor=mu_factor)
+        # print("h: ", target_pos_tensor)
         target_pos_list = np.array(target_pos_tensor)
+        # print(target_pos_list.shape)
         # print("Target pos: ",target_pos_list[:,3])
         dynamics.reset()
+        tb = time.time()
+        # print("Waypoint generation time: ", tb-ta)
         # print(self.obs_state())
         
         # target_list_all += target_pos_list
@@ -597,8 +653,9 @@ class CarNode(Node):
             one_hot_delay = convert_delay_to_onehot(np.array([(DELAY-1)*0]))
         else :
             one_hot_delay = convert_delay_to_onehot(np.array([curr_delay]))
-        
-        if self.i < stats['online_transition'] :
+        # print(self.obs_state())
+        if self.i < stats['online_transition'] and self.i > 3:
+            status.data = 1
             action, mppi_info = mppi(self.obs_state(),target_pos_tensor, vis_optim_traj=True, model_params=None)
         elif self.i > stats['total_length'] :
             filename = 'data/'+exp_name + '.pickle'
@@ -606,6 +663,7 @@ class CarNode(Node):
                 pickle.dump(stats, file)
             exit(0)
         else :
+            status.data = 2
             t1 = time.time()
             for model in models :
                 model = model.to(DEVICE)
@@ -619,7 +677,7 @@ class CarNode(Node):
                 model = model.to('cpu')
             t4 = time.time()
             # print("Model to gpu time: ", t2-t1)
-            # print("MPPI time: ", t3-t2)
+            print("MPPI time: ", t3-t2)
             # print("Model to cpu time: ", t4-t3)
         action = np.array(action)
         if self.curr_t_counter + 1e-3 > DT_torch :
@@ -631,10 +689,9 @@ class CarNode(Node):
         px, py, psi, vx, vy, omega = self.obs_state().tolist()
         lat_err = np.sqrt((target_pos_list[0,0]-px)**2 + (target_pos_list[0,1]-py)**2)
         stats['lat_errs'].append(lat_err)
-        self.states.append([vx,vy,omega])
-        self.cmds.append([action[0], action[1]])
-        
-        
+        if self.i > i_start :
+            self.states.append([vx,vy,omega])
+            self.cmds.append([action[0], action[1]])
         
         q = quaternion_from_euler(0, 0, psi)
         now = self.get_clock().now().to_msg()
@@ -678,7 +735,9 @@ class CarNode(Node):
         actions[:,1] = 1
         if len(self.states) > HISTORY :
             traj_pred = rollout_nn(np.array(self.states[-HISTORY:]),np.concatenate((self.cmds[-HISTORY:-1],actions),axis=0),self.obs_state().tolist(),one_hot_delay,debug=True)
-        
+        else :
+            status.data = 0
+        self.status_pub_.publish(status)
         nn_path = Path()
         nn_path.header.frame_id = 'map'
         nn_path.header.stamp = now
@@ -690,15 +749,11 @@ class CarNode(Node):
             nn_path.poses.append(pose)
         self.path_pub_nn.publish(nn_path)
         
-        if SIM == 'unity':
-            if self.i==1 :
-                action[0] = -3.
-                action[1] = -3.
-            self.ackermann_msg.acceleration = float(action[0])
-            self.ackermann_msg.steering_angle = float(action[1])
-            self.unity_publisher_.publish(self.ackermann_msg)
-            obs = np.array(self.unity_state)
-        elif SIM == 'numerical':
+        if self.i < 6 :
+            action[0] = 0.
+            action[1] = 0.
+        
+        if SIM == 'numerical':
             obs, reward, done, info = env.step(action)
         else :
             obs = np.array(vicon_loc)
@@ -751,9 +806,9 @@ class CarNode(Node):
         throttle = Float64()
         throttle.data = float(action[0])
         self.throttle_pub_.publish(throttle)
-        
         steer = Float64()
-        steer.data = float(action[1])
+        curr_steer += 0.1*(float(action[1]) - curr_steer) 
+        steer.data = curr_steer #float(action[1])
         self.steer_pub_.publish(steer)
         
         # trajectory array
@@ -802,8 +857,11 @@ class CarNode(Node):
             p.z = 0.
             body.polygon.points.append(p)
         self.body_pub_.publish(body)
-        t2 = time.time()
-        print("Time taken", t2-t1)
+        tf = time.time()
+        print("Time taken", tf-ti)
+        if SIM == 'unity' :
+            self.pose_received = False
+            self.vel_received = False
 
         
     def slow_timer_callback(self):
