@@ -155,6 +155,7 @@ class WaypointGenerator:
                 pos_next = self.fn(t_1)
                 vel = (pos_next - pos) / dt
                 speed_ref = jnp.clip(jnp.linalg.norm(vel), .5, 100.)
+                # print(speed_ref)
                 psi = jnp.arctan2(pos_next[1] - pos[1], pos_next[0] - pos[0])
                 target_pos_list.append(jnp.array([pos[0], pos[1], psi, speed_ref]))
             return jnp.array(target_pos_list), None

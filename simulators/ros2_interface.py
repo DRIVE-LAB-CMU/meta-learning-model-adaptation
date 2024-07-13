@@ -33,7 +33,7 @@ throttle_cmd = 0
 SYNC = True
 DELAY = 0
 N_ACTIONS_PER_STEP = 2
-track_type = 'circuit_kart' # from circuit, oval, mars, grass, mud, circuit_decay, circuit_kart
+track_type = 'oval' # from circuit, oval, mars, grass, mud, circuit_decay, circuit_kart, circuit_bias
 
 # Copy params-{track_type}.yaml to params.yaml
 os.system(f'cp params-{track_type}.yaml params.yaml')

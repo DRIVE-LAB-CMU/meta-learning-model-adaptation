@@ -39,6 +39,7 @@ vehicle_params:
   m: 250.0
   I: 300.0
   max_steer: 0.34
+  steer_bias: 0.1
   Lf: 1.0
   Lr: 1.0
   K_cmd: 6000.0

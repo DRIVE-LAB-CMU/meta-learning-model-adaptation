@@ -16,7 +16,7 @@ framebuffer_no_attachments GL_ARB_framebuffer_object GL_ARB_framebuffer_sRGB GL_
 der_stencil_export GL_ARB_shader_storage_buffer_object GL_ARB_shader_subroutine GL_ARB_shader_texture_lod GL_ARB_shading_language_420pack GL_ARB_shading_language_include GL_ARB_shading_language_packing GL_ARB_stencil_texturing GL_ARB_sync GL_ARB_tessellation_shader GL_ARB_texture_buffer_object GL_ARB_texture_buffer_object_rgb32 GL_ARB_texture_buffer_range GL_ARB_texture_compression_bptc GL_ARB_texture_compression_rgtc GL_ARB_texture_cube_map_array GL_ARB_texture_filter_anisotropic GL_ARB_texture_float GL_ARB_texture_gather GL_ARB_texture_multisample GL_ARB_texture_non_power_of_two GL_ARB_texture_query_levels GL_ARB_texture_query_lod GL_ARB_texture_rectangle GL_ARB_texture_rg GL_ARB_texture_rgb10_a2ui GL_ARB_texture_stencil8 GL_ARB_texture_storage GL_ARB_texture_storage_multisample GL_ARB_texture_swizzle GL_ARB_timer_query GL_ARB_transform_feedback2 GL_ARB_transform_feedback3 GL_ARB_transform_feedback_instanced GL_ARB_uniform_buffer_object GL_ARB_vertex_array_bgra GL_ARB_vertex_array_object GL_ARB_vertex_attr
 ib_64bit GL_ARB_vertex_attrib_binding GL_ARB_vertex_buffer_object GL_ARB_vertex_shader GL_ARB_vertex_type_10f_11f_11f_rev GL_ARB_vertex_type_2_10_10_10_rev GL_ARB_viewport_array GL_ATI_blend_equation_separate GL_ATI_texture_float GL_EXT_EGL_image_storage GL_EXT_EGL_sync GL_EXT_abgr GL_EXT_blend_equation_separate GL_EXT_debug_label GL_EXT_draw_buffers2 GL_EXT_draw_instanced GL_EXT_framebuffer_blit GL_EXT_framebuffer_multisample GL_EXT_framebuffer_multisample_blit_scaled GL_EXT_framebuffer_object GL_EXT_framebuffer_sRGB GL_EXT_memory_object GL_EXT_memory_object_fd GL_EXT_packed_depth_stencil GL_EXT_packed_float GL_EXT_pixel_buffer_object GL_EXT_provoking_vertex GL_EXT_semaphore GL_EXT_semaphore_fd GL_EXT_shader_integer_mix GL_EXT_texture_array GL_EXT_texture_compression_dxt1 GL_EXT_texture_compression_rgtc GL_EXT_texture_compression_s3tc GL_EXT_texture_filter_anisotropic GL_EXT_texture_integer GL_EXT_texture_sRGB GL_EXT_texture_sRGB_decode GL_EXT_texture_shared_exponent GL_EXT_texture_snorm GL_EXT_texture_swiz
 zle GL_EXT_timer_query GL_EXT_transform_feedback GL_EXT_vertex_array_bgra GL_EXT_vertex_attrib_64bit GL_IBM_multimode_draw_arrays GL_KHR_context_flush_control GL_KHR_debug GL_KHR_no_error GL_KHR_parallel_shader_compile GL_KHR_robust_buffer_access_behavior GL_KHR_robustness GL_KHR_texture_compression_astc_ldr GL_KHR_texture_compression_astc_sliced_3d GL_MESA_pack_invert GL_MESA_shader_integer_functions GL_MESA_texture_signed_rgba GL_NV_conditional_render GL_NV_copy_image GL_NV_depth_clamp GL_NV_packed_depth_stencil GL_NV_vdpau_interop GL_OES_EGL_image GL_S3_s3tc
-OPENGL LOG: Creating OpenGL 4.2 graphics device ; Context level  <OpenGL 4.2> ; Context handle 21003648
+OPENGL LOG: Creating OpenGL 4.2 graphics device ; Context level  <OpenGL 4.2> ; Context handle 32251248
 ALSA lib confmisc.c:855:(parse_card) cannot find card '0'
 ALSA lib conf.c:5178:(_snd_config_evaluate) function snd_func_card_inum returned error: No such file or directory
 ALSA lib confmisc.c:422:(snd_func_concat) error evaluating strings
@@ -38,17 +38,17 @@ ALSA lib pcm.c:2664:(snd_pcm_open_noupdate) Unknown PCM default
 FMOD failed to initialize the output device.: "Error initializing output device. " (60)
 FMOD failed to initialize any audio devices, running on emulated software output with no sound. Please check your audio drivers and/or hardware for malfunction.
 Begin MonoManager ReloadAssembly
-- Completed reload, in  0.075 seconds
+- Completed reload, in  0.078 seconds
 ERROR: Shader Hidden/Universal Render Pipeline/Edge Adaptive Spatial Upsampling shader is not supported on this GPU (none of subshaders/fallbacks are suitable)
 Default vsync count 0
 requesting resize 815 x 495
 resizing window to 815 x 495
 Desktop is 1280 x 720 @ 0 Hz
 The tree grass Variant must use the Nature/Soft Occlusion shader. Otherwise billboarding/lighting will not work correctly.
-UnloadTime: 1.075823 ms
+UnloadTime: 1.399808 ms
 Delta time: 0.01
 Deserialized parameters from YAML file: params.yaml
-Heightmap image loaded: heightmap.png
+Heightmap image loaded: heightmap-new.png
 Here 2
 Selected road
 Width, Height: 512 4097 1.953125
@@ -59,13 +59,12 @@ Here 1 before
 Here 1
 Episode: 1
 Episode: 2
-Episode: 3
 Setting up 8 worker threads for Enlighten.
 Memory Statistics:
 [ALLOC_TEMP_TLS] TLS Allocator
   StackAllocators : 
     [ALLOC_TEMP_MAIN]
-      Peak usage frame count: [4.0 KB-8.0 KB]: 597 frames, [8.0 KB-16.0 KB]: 6573 frames, [32.0 KB-64.0 KB]: 1 frames, [4.0 MB-8.0 MB]: 1 frames
+      Peak usage frame count: [8.0 KB-16.0 KB]: 8405 frames, [32.0 KB-64.0 KB]: 1 frames, [4.0 MB-8.0 MB]: 1 frames
       Initial Block Size 4.0 MB
       Current Block Size 7.7 MB
       Peak Allocated Bytes 7.7 MB
@@ -93,7 +92,7 @@ Memory Statistics:
     [ALLOC_TEMP_Job.Worker 0]
       Initial Block Size 256.0 KB
       Current Block Size 256.0 KB
-      Peak Allocated Bytes 2.4 KB
+      Peak Allocated Bytes 9.5 KB
       Overflow Count 0
     [ALLOC_TEMP_Background Job.Worker 10]
       Initial Block Size 32.0 KB
@@ -123,22 +122,22 @@ Memory Statistics:
     [ALLOC_TEMP_Job.Worker 4]
       Initial Block Size 256.0 KB
       Current Block Size 256.0 KB
-      Peak Allocated Bytes 3.4 KB
+      Peak Allocated Bytes 9.5 KB
       Overflow Count 0
     [ALLOC_TEMP_Job.Worker 14]
       Initial Block Size 256.0 KB
       Current Block Size 256.0 KB
-      Peak Allocated Bytes 2.4 KB
+      Peak Allocated Bytes 9.3 KB
       Overflow Count 0
     [ALLOC_TEMP_Job.Worker 3]
       Initial Block Size 256.0 KB
       Current Block Size 256.0 KB
-      Peak Allocated Bytes 2.4 KB
+      Peak Allocated Bytes 9.5 KB
       Overflow Count 0
     [ALLOC_TEMP_Job.Worker 13]
       Initial Block Size 256.0 KB
       Current Block Size 256.0 KB
-      Peak Allocated Bytes 2.4 KB
+      Peak Allocated Bytes 9.5 KB
       Overflow Count 0
     [ALLOC_TEMP_Background Job.Worker 12]
       Initial Block Size 32.0 KB
@@ -188,7 +187,7 @@ Memory Statistics:
     [ALLOC_TEMP_Job.Worker 9]
       Initial Block Size 256.0 KB
       Current Block Size 256.0 KB
-      Peak Allocated Bytes 15.6 KB
+      Peak Allocated Bytes 9.5 KB
       Overflow Count 0
     [ALLOC_TEMP_Background Job.Worker 13]
       Initial Block Size 32.0 KB
@@ -198,22 +197,22 @@ Memory Statistics:
     [ALLOC_TEMP_Job.Worker 8]
       Initial Block Size 256.0 KB
       Current Block Size 256.0 KB
-      Peak Allocated Bytes 2.4 KB
+      Peak Allocated Bytes 9.4 KB
       Overflow Count 0
     [ALLOC_TEMP_Job.Worker 7]
       Initial Block Size 256.0 KB
       Current Block Size 256.0 KB
-      Peak Allocated Bytes 2.4 KB
+      Peak Allocated Bytes 9.5 KB
       Overflow Count 0
     [ALLOC_TEMP_Job.Worker 1]
       Initial Block Size 256.0 KB
       Current Block Size 256.0 KB
-      Peak Allocated Bytes 2.4 KB
+      Peak Allocated Bytes 9.5 KB
       Overflow Count 0
     [ALLOC_TEMP_Job.Worker 2]
       Initial Block Size 256.0 KB
       Current Block Size 256.0 KB
-      Peak Allocated Bytes 2.4 KB
+      Peak Allocated Bytes 9.5 KB
       Overflow Count 0
     [ALLOC_TEMP_Background Job.Worker 3]
       Initial Block Size 32.0 KB
@@ -228,7 +227,7 @@ Memory Statistics:
     [ALLOC_TEMP_Job.Worker 10]
       Initial Block Size 256.0 KB
       Current Block Size 256.0 KB
-      Peak Allocated Bytes 2.4 KB
+      Peak Allocated Bytes 15.6 KB
       Overflow Count 0
     [ALLOC_TEMP_Background Job.Worker 0]
       Initial Block Size 32.0 KB
@@ -238,12 +237,12 @@ Memory Statistics:
     [ALLOC_TEMP_Job.Worker 11]
       Initial Block Size 256.0 KB
       Current Block Size 256.0 KB
-      Peak Allocated Bytes 2.4 KB
+      Peak Allocated Bytes 9.5 KB
       Overflow Count 0
     [ALLOC_TEMP_Job.Worker 12]
       Initial Block Size 256.0 KB
       Current Block Size 256.0 KB
-      Peak Allocated Bytes 2.4 KB
+      Peak Allocated Bytes 9.5 KB
       Overflow Count 0
     [ALLOC_TEMP_Background Job.Worker 4]
       Initial Block Size 32.0 KB
@@ -256,22 +255,22 @@ Memory Statistics:
       Peak Allocated Bytes 0 B
       Overflow Count 0
 [ALLOC_DEFAULT] Dual Thread Allocator
-  Peak main deferred allocation count 253
+  Peak main deferred allocation count 2208
     [ALLOC_BUCKET]
       Large Block size 4.0 MB
       Used Block count 1
-      Peak Allocated bytes 3.0 MB
+      Peak Allocated bytes 3.6 MB
     [ALLOC_DEFAULT_MAIN]
-      Peak usage frame count: [128.0 MB-256.0 MB]: 7172 frames
+      Peak usage frame count: [128.0 MB-256.0 MB]: 8407 frames
       Requested Block Size 16.0 MB
-      Peak Block count 5
-      Peak Allocated memory 141.6 MB
+      Peak Block count 6
+      Peak Allocated memory 144.0 MB
       Peak Large allocation bytes 128.1 MB
     [ALLOC_DEFAULT_THREAD]
-      Peak usage frame count: [32.0 MB-64.0 MB]: 7172 frames
+      Peak usage frame count: [32.0 MB-64.0 MB]: 8407 frames
       Requested Block Size 16.0 MB
       Peak Block count 2
-      Peak Allocated memory 59.9 MB
+      Peak Allocated memory 59.8 MB
       Peak Large allocation bytes 32.0 MB
 [ALLOC_TEMP_JOB_1_FRAME]
   Initial Block Size 2.0 MB
@@ -298,15 +297,15 @@ Memory Statistics:
     [ALLOC_BUCKET]
       Large Block size 4.0 MB
       Used Block count 1
-      Peak Allocated bytes 3.0 MB
+      Peak Allocated bytes 3.6 MB
     [ALLOC_GFX_MAIN]
-      Peak usage frame count: [64.0 MB-128.0 MB]: 7171 frames, [128.0 MB-256.0 MB]: 1 frames
+      Peak usage frame count: [64.0 MB-128.0 MB]: 8406 frames, [128.0 MB-256.0 MB]: 1 frames
       Requested Block Size 16.0 MB
       Peak Block count 1
       Peak Allocated memory 170.9 MB
       Peak Large allocation bytes 170.8 MB
     [ALLOC_GFX_THREAD]
-      Peak usage frame count: [4.0 MB-8.0 MB]: 7172 frames
+      Peak usage frame count: [4.0 MB-8.0 MB]: 8407 frames
       Requested Block Size 16.0 MB
       Peak Block count 1
       Peak Allocated memory 4.2 MB
@@ -316,15 +315,15 @@ Memory Statistics:
     [ALLOC_BUCKET]
       Large Block size 4.0 MB
       Used Block count 1
-      Peak Allocated bytes 3.0 MB
+      Peak Allocated bytes 3.6 MB
     [ALLOC_CACHEOBJECTS_MAIN]
-      Peak usage frame count: [32.0 MB-64.0 MB]: 7172 frames
+      Peak usage frame count: [32.0 MB-64.0 MB]: 8407 frames
       Requested Block Size 4.0 MB
       Peak Block count 9
       Peak Allocated memory 59.2 MB
       Peak Large allocation bytes 24.9 MB
     [ALLOC_CACHEOBJECTS_THREAD]
-      Peak usage frame count: [8.0 MB-16.0 MB]: 7171 frames, [16.0 MB-32.0 MB]: 1 frames
+      Peak usage frame count: [8.0 MB-16.0 MB]: 8406 frames, [16.0 MB-32.0 MB]: 1 frames
       Requested Block Size 4.0 MB
       Peak Block count 6
       Peak Allocated memory 20.4 MB
@@ -334,15 +333,15 @@ Memory Statistics:
     [ALLOC_BUCKET]
       Large Block size 4.0 MB
       Used Block count 1
-      Peak Allocated bytes 3.0 MB
+      Peak Allocated bytes 3.6 MB
     [ALLOC_TYPETREE_MAIN]
-      Peak usage frame count: [0-1.0 KB]: 7172 frames
+      Peak usage frame count: [0-1.0 KB]: 8407 frames
       Requested Block Size 2.0 MB
       Peak Block count 1
       Peak Allocated memory 1.1 KB
       Peak Large allocation bytes 0 B
     [ALLOC_TYPETREE_THREAD]
-      Peak usage frame count: [1.0 KB-2.0 KB]: 7171 frames, [2.0 KB-4.0 KB]: 1 frames
+      Peak usage frame count: [1.0 KB-2.0 KB]: 8406 frames, [2.0 KB-4.0 KB]: 1 frames
       Requested Block Size 2.0 MB
       Peak Block count 1
       Peak Allocated memory 2.2 KB

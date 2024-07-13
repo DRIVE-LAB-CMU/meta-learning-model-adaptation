@@ -1,0 +1,70 @@
+track_info:
+  centerline_file: "berlin_2018-large.csv"
+  track_width: 5.0
+  track_texture: "road" # sand, mud, grass or road
+  texture_blend_factor: 0.03
+  obs_density: 0.0
+  vegetation_density: 0.0
+  offtrack_roughness: 0.000
+  ontrack_roughness: 0.0000
+  scale: 20.0
+  right_fence: false
+  left_fence: false
+  fence_height: 5.0 # in meters
+  ox: 200.0
+  oy: 200.0
+  bush_demarcation: 0.0
+
+heightmap:
+  filename: "heightmap.png"
+  scale: 0.0
+
+respawn_loc: 
+  x: 200.0
+  y: 2.0
+  z: 200.0
+  roll: 0
+  pitch: 230
+  yaw: 0
+
+sensors:
+  lidar: true
+  camera: true
+  pose: true
+  imu: true
+
+timescale: 2.0
+
+vehicle_params:
+  m: 250.0
+  I: 300.0
+  max_steer: 0.34
+  steer_bias: 0.1
+  Lf: 1.0
+  Lr: 1.0
+  K_cmd: 6000.0
+  K_v: 250.0
+  K_brake: 4000.0
+  K_aero: 0.1
+  K_aero_downforce: 0.3
+  mu_f: 0.9
+  mu_r: 0.9
+  mu_l: 1.0
+  long_extremum_slip: 0.05
+  g: 9.81
+  h_cg: 0.0
+  Cf: 1.0
+  Cr: 1.0
+  Bf: 10.0
+  Br: 10.0
+  K_steer: 1.0
+  K_friction: 0.0
+  delay: 0
+  v_kin: 2.5
+  long_slipable: true
+  rear_driven: true
+  front_driven: false
+  DT: 0.035
+  K_couple: 0.0
+  friction_decay_rate: 0.00
+  friction_decay_start: 0.0

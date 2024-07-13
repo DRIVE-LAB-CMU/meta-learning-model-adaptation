@@ -4,7 +4,7 @@ from car_dynamics.models_torch.utils import normalize_angle_tensor, fold_angle_t
 
 #----------------- reward functions -----------------#
 
-def reward_track_fn(goal_list: torch.Tensor, defaul_speed: float):
+def reward_track_fn(goal_list: torch.Tensor, defaul_speed: float, sim):
     def reward(state, action, discount):
         """
             - state: contains current state of the car
@@ -34,10 +34,20 @@ def reward_track_fn(goal_list: torch.Tensor, defaul_speed: float):
             # vel_diff = torch.norm(state_step[:, 3:4] - defaul_speed, dim=1)
             vel_diff = torch.abs(state_step[:, 3] - goal_list[h+1, 3]) * (state_step[:, 3] > goal_list[h+1, 3])
             vel_diff += torch.abs(state_step[:, 3] - 0.5) * (state_step[:, 3] < 0.5)
-            if h > 0 :
-                reward = -dist - 3. * vel_diff - 0.0 * torch.norm(action_step[:, 1:2], dim=1) -3.*theta_diff**2 #- 10.*torch.norm(action_step-prev_action_step,dim=1)
+            if h < horizon - 1:
+                if sim == 'unity' :
+                    reward = -dist - 3. * vel_diff - 0.0 * torch.norm(action_step[:, 1:2], dim=1) -theta_diff**2 #- 10.*torch.norm(action_step-prev_action_step,dim=1)
+                elif sim == 'vicon' :
+                    reward = -30.*dist - 3. * vel_diff - 0.0 * torch.norm(action_step[:, 1:2], dim=1) -theta_diff**2 #- 10.*torch.norm(action_step-prev_action_step,dim=1)
+                else :
+                    reward = -10.*dist - 3. * vel_diff - 0.0 * torch.norm(action_step[:, 1:2], dim=1) -theta_diff**2 #- 10.*torch.norm(action_step-prev_action_step,dim=1)
             else :
-                reward = -dist - 3. * vel_diff - 0.0 * torch.norm(action_step[:, 1:2], dim=1) -3.*theta_diff**2
+                if sim == 'unity' :
+                    reward = -dist - 3. * vel_diff - 0.0 * torch.norm(action_step[:, 1:2], dim=1) -theta_diff**2
+                elif sim == 'vicon' :
+                    reward = -30.*dist - 3. * vel_diff - 0.0 * torch.norm(action_step[:, 1:2], dim=1) -theta_diff**2
+                else :
+                    reward = -10.*dist - 3. * vel_diff - 0.0 * torch.norm(action_step[:, 1:2], dim=1) -theta_diff**2
             # reward = - 0.4 * dist - 0.0 * torch.norm(action_step, dim=1) - 0.0 * vel_diff - 0.1 * torch.log(1 + dist)
             # reward = - 0.4 * dist
             reward_rollout += reward *(discount ** h) * reward_activate

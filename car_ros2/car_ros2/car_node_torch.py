@@ -36,61 +36,72 @@ import struct
 import threading
 print("DEVICE", jax.devices())
 
-DT = 0.07
-DT_torch = 0.07
-DELAY = 4
+DT = 0.1
+DT_torch = 0.1
+DELAY = 2
 N_ROLLOUTS = 10000
 H = 8
 SIGMA = 1.0
-LF = 1.6
-LR = 1.5
-L = LF+LR
-learning_rate = 0.00001
-i_start = 60
+i_start = 30
 
 ####### VICON Callback ####################
 vicon_loc = None
 def update_vicon():
+    global vicon_loc
     server_ip = "0.0.0.0"
-    server_port = 12345
-
+    server_port = 12346
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     server_socket.bind((server_ip, server_port))
 
     print(f"UDP server listening on {server_ip}:{server_port}")
 
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 0)
+    t = time.time()
     while True :
-        data, addr = server_socket.recvfrom(24)  # 3 doubles * 8 bytes each = 24 bytes
-        unpacked_data = struct.unpack('ddd', data)
-        # print(f"Received pose from {addr}: {unpacked_data}")
-        vx_ = (unpacked_data[0]/1000. - pose_x)/(t_prev - time.time())
-        vy_ = (unpacked_data[1]/1000. - pose_y)/(t_prev - time.time())
-        vx = vx_*np.cos(pose_yaw) + vy_*np.sin(pose_yaw)
-        vy = -vx_*np.sin(pose_yaw) + vy_*np.cos(pose_yaw)
-        vyaw = (unpacked_data[2] - pose_yaw)/(t_prev - time.time())
-        t_prev = time.time()
-        pose_x = unpacked_data[0]/1000.
-        pose_y = unpacked_data[1]/1000.
-        pose_yaw = unpacked_data[2]
-
-        vicon_loc = [pose_x, pose_y, pose_yaw, vx, vy, vyaw]
+        data, addr = server_socket.recvfrom(48)  # 3 doubles * 8 bytes each = 24 bytes
+        unpacked_data = struct.unpack('dddddd', data)
+        if np.isnan(unpacked_data[0]) or np.isnan(unpacked_data[1]) or np.isnan(unpacked_data[2]) or np.isnan(unpacked_data[3]) or np.isnan(unpacked_data[4]) or np.isnan(unpacked_data[5]):
+            print("NAN received")
+            exit(0)
+            continue
+        # print(f"Received pose from {addr}: {unpacked_data}", time.time()-t)
+        t = time.time()
+        vicon_loc = [unpacked_data[0],unpacked_data[1],unpacked_data[2],unpacked_data[3],unpacked_data[4],unpacked_data[5]]
+        # time.sleep(0.005)
 
 trajectory_type = "counter oval"
 # trajectory_type = "berlin_2018"
-SIM = 'unity' # 'numerical' or 'unity' or 'vicon'
+SIM = 'vicon' # 'numerical' or 'unity' or 'vicon'
 
 if SIM == 'vicon' :
+    learning_rate = 0.0004
     vicon_thread = threading.Thread(target=update_vicon)
     vicon_thread.start()
+    LF = 0.16
+    LR = 0.15
+    L = LF+LR
+    client_ip = "rcar.wifi.local.cmu.edu"
+    client_port = 12347
+    client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    
+
+if SIM == 'numerical' :
+    learning_rate = 0.001
+    LF = 0.16
+    LR = 0.15
+    L = LF+LR
 
 if SIM=='unity' :
+    learning_rate = 0.00001
     trajectory_type = "../../simulators/params.yaml"
+    LF = 1.6
+    LR = 1.5
+    L = LF+LR
 
 if SIM == 'unity' :
     SPEED = 10.0
 else :
-    SPEED = 2.2
+    SPEED = 2.
 
 sigmas = torch.tensor([SIGMA] * 2)
 a_cov_per_step = torch.diag(sigmas**2)
@@ -122,7 +133,9 @@ else :
     MODEL = 'nn' # 'nn' or 'nn-lstm
 
 # model_params = DynamicParams(num_envs=N_ROLLOUTS, DT=DT,Sa=random.uniform(0.6,0.75), Sb=random.uniform(-0.1,0.1),Ta=random.uniform(5.,45.), Tb=.0, mu=random.uniform(0.35,0.65),delay=1)
-model_params = DynamicParams(num_envs=N_ROLLOUTS, DT=DT,Sa=random.uniform(0.36,0.38), Sb=random.uniform(-0.01,0.01),Ta=random.uniform(15.,25.), Tb=.0, mu=random.uniform(0.45,0.55),delay=1)
+model_params = DynamicParams(num_envs=N_ROLLOUTS, DT=DT,Sa=random.uniform(0.59,0.60), Sb=random.uniform(-0.01,0.01),Ta=random.uniform(10.,15.), Tb=.0, mu=random.uniform(0.45,0.55),delay=1)
+# model_params = DynamicParams(num_envs=N_ROLLOUTS, DT=DT,Sa=0.34, Sb=-0., Ta=20., Tb=.0, mu=0.5)#random.randint(1,5))
+
 if SIM == 'unity' :
     yaml_contents = yaml.load(open(trajectory_type, 'r'), Loader=yaml.FullLoader)
     
@@ -144,7 +157,7 @@ if SIM == 'unity' :
 
 
 model_params_single = DynamicParams(num_envs=1, DT=DT,Sa=0.34, Sb=-0., Ta=20., Tb=.0, mu=0.5,delay=DELAY)#random.randint(1,5))
-stats = {'lat_errs': [], 'ws_gt': [], 'ws_': [], 'ws': [], 'losses': [], 'date_time': time.strftime("%m/%d/%Y %H:%M:%S"),'buffer': 100, 'lr': learning_rate, 'online_transition': 250, 'delay': DELAY, 'model': MODEL, 'speed': SPEED, 'total_length': 3000, 'history': HISTORY, 'params': model_params}
+stats = {'lat_errs': [], 'ws_gt': [], 'ws_': [], 'ws': [], 'losses': [], 'date_time': time.strftime("%m/%d/%Y %H:%M:%S"),'buffer': 100, 'lr': learning_rate, 'online_transition': 300, 'delay': DELAY, 'model': MODEL, 'speed': SPEED, 'total_length': 2000, 'history': HISTORY, 'params': model_params, 'traj': [], 'ref_traj': []}
 for i in range(N_ensembles):
     stats['losses'+str(i)] = []
     
@@ -342,9 +355,15 @@ frames = []
 if SIM == 'numerical' :
     env = OffroadCar({}, dynamics_single)
     obs = env.reset()
-else :
+elif SIM == 'unity' :
     obs = np.array([yaml_contents['respawn_loc']['z'], yaml_contents['respawn_loc']['x'],0.,0.,0.,0.,])
-    
+elif SIM == 'vicon' :
+    obs = np.array([0.,0.,0.,0.,0.,0.])
+    pose_x = 0.
+    pose_y = 0.
+    pose_yaw = 0.
+    t_prev = time.time()
+
 goal_list = []
 target_list = []
 action_list = []
@@ -440,6 +459,9 @@ def rollout_nn(states,actions,state,one_hot_delay,debug=False) :
     return np.array(traj)
 
 def train_step(states,cmds,augment=True,art_delay=ART_DELAY,one_hot_delay=None,predict_delay=False,print_pred_delay=False) :
+    # print("This is called")
+    # print(len(states),len(cmds))
+    # print(states,cmds)
     global models, stats, model_delay, curr_delay
     if art_delay > 0 :
         states = states[:-art_delay]
@@ -514,7 +536,10 @@ def train_step(states,cmds,augment=True,art_delay=ART_DELAY,one_hot_delay=None,p
         optimizer.zero_grad()
         # Forward pass
         # print(outputs.shape,Y.shape,wts.shape)
+        # print(X,outputs)
+        # print(outputs,Y/DT)
         loss = criterion(wts*outputs, wts*Y/DT)
+        # print(loss.item())
         stats['losses'+str(i)].append(loss.item())
         # Backward pass and optimization
         loss.backward()
@@ -523,6 +548,46 @@ def train_step(states,cmds,augment=True,art_delay=ART_DELAY,one_hot_delay=None,p
     if args.lstm :
         return h_ns, c_ns
     return
+
+# def train_step_tires(states,cmds,augment=True,art_delay=ART_DELAY,one_hot_delay=None,predict_delay=False,print_pred_delay=False) :
+#     global models, stats, model_delay, curr_delay
+#     if art_delay > 0 :
+#         states = states[:-art_delay]
+#         cmds = cmds[art_delay:]
+#     elif art_delay < 0 :
+#         cmds = cmds[:art_delay]
+#         states = states[-art_delay:]
+#     h_ns = []
+#     c_ns = []
+#     for i in range(N_ensembles):
+#         optimizer = optimizers[i]
+#         model = models[i]
+    
+#         vxs = np.array(states)[:,0]
+#         vys = np.array(states)[:,1]
+#         ws = np.array(states)[:,2]
+#         steers = np.array(cmds)[:,0]
+#         throttles = np.array(cmds)[:,1]
+#         alpha_fs = steers - np.arctan2(vys+ws*LF,vxs)
+#         alpha_rs = np.arctan2(-vys+ws*LR,vxs)
+#         m_I = mass/I
+#         A = np.array([[1.,0.,-np.sin(steers)],[0.,1.,np.cos(steers)],[0.,m_I*np.cos(steers)*LF,m_I*LR]])
+#         Y = torch.tensor(Y)
+#         wts = torch.ones_like(Y)
+#         outputs = model(X)           
+#         optimizer.zero_grad()
+#         # Forward pass
+#         # print(outputs.shape,Y.shape,wts.shape)
+#         loss = criterion(wts*outputs, wts*Y/DT)
+#         stats['losses'+str(i)].append(loss.item())
+#         # Backward pass and optimization
+#         loss.backward()
+#         optimizer.step()
+    
+#     if args.lstm :
+#         return h_ns, c_ns
+#     return
+
 
 curr_steer = 0.
 class CarNode(Node):
@@ -608,11 +673,12 @@ class CarNode(Node):
         
         self.i += 1
         mu_factor = 1.
-        if self.i*DT > decay_start :
-            mu_factor = 1. - (self.i*DT - decay_start)*decay_rate
-        mu_msg = Float64()
-        mu_msg.data = mu_factor
-        self.mu_factor_pub_.publish(mu_msg)
+        if SIM == 'unity' :
+            if self.i*DT > decay_start :
+                mu_factor = 1. - (self.i*DT - decay_start)*decay_rate
+            mu_msg = Float64()
+            mu_msg.data = mu_factor
+            self.mu_factor_pub_.publish(mu_msg)
         # distance_list = np.linalg.norm(waypoint_list - obs[:2], axis=-1)
         # # import pdb; pdb.set_trace()
         # t_idx = np.argmin(distance_list)
@@ -636,6 +702,7 @@ class CarNode(Node):
         else :
             target_pos_tensor, _ = waypoint_generator.generate(jnp.array(obs[:5]),dt=DT_torch,mu_factor=mu_factor)
         # print("h: ", target_pos_tensor)
+        stats['traj'].append([self.obs_state()])
         target_pos_list = np.array(target_pos_tensor)
         # print(target_pos_list.shape)
         # print("Target pos: ",target_pos_list[:,3])
@@ -656,10 +723,14 @@ class CarNode(Node):
         # print(self.obs_state())
         if self.i < stats['online_transition'] and self.i > 3:
             status.data = 1
+            print("State: ", self.obs_state())
             action, mppi_info = mppi(self.obs_state(),target_pos_tensor, vis_optim_traj=True, model_params=None)
         elif self.i > stats['total_length'] :
             filename = 'data/'+exp_name + '.pickle'
             with open(filename, 'wb') as file:
+                stats['ref_traj'] = np.array(waypoint_generator.waypoint_list_np)
+                stats['traj'] = np.array(stats['traj'])
+                print(stats['traj'].shape)
                 pickle.dump(stats, file)
             exit(0)
         else :
@@ -669,9 +740,10 @@ class CarNode(Node):
                 model = model.to(DEVICE)
             t2 = time.time()
             if not args.lstm :
-                action, mppi_info = mppi_torch(np.array(self.obs_state()), reward_track_fn(target_pos_tensor_torch, SPEED), vis_optim_traj=True, one_hot_delay=one_hot_delay.to(DEVICE))
+                print("State: ", self.obs_state())
+                action, mppi_info = mppi_torch(np.array(self.obs_state()), reward_track_fn(target_pos_tensor_torch, SPEED, SIM), vis_optim_traj=True, one_hot_delay=one_hot_delay.to(DEVICE))
             else :
-                action, mppi_info = mppi_torch(np.array(self.obs_state()), reward_track_fn(target_pos_tensor_torch, SPEED), vis_optim_traj=True, one_hot_delay=one_hot_delay.to(DEVICE), h_0s=h_0s, c_0s=c_0s)
+                action, mppi_info = mppi_torch(np.array(self.obs_state()), reward_track_fn(target_pos_tensor_torch, SPEED, SIM), vis_optim_traj=True, one_hot_delay=one_hot_delay.to(DEVICE), h_0s=h_0s, c_0s=c_0s)
             t3 = time.time()
             for model in models :
                 model = model.to('cpu')
@@ -690,7 +762,13 @@ class CarNode(Node):
         lat_err = np.sqrt((target_pos_list[0,0]-px)**2 + (target_pos_list[0,1]-py)**2)
         stats['lat_errs'].append(lat_err)
         if self.i > i_start :
+            if np.isnan(vx) or np.isnan(vy) or np.isnan(omega) :
+                print("State received a nan value")
+                exit(0) 
             self.states.append([vx,vy,omega])
+            if np.isnan(action[0]) or np.isnan(action[1]) :
+                print("Action received a nan value")
+                exit(0)
             self.cmds.append([action[0], action[1]])
         
         q = quaternion_from_euler(0, 0, psi)
@@ -737,6 +815,7 @@ class CarNode(Node):
             traj_pred = rollout_nn(np.array(self.states[-HISTORY:]),np.concatenate((self.cmds[-HISTORY:-1],actions),axis=0),self.obs_state().tolist(),one_hot_delay,debug=True)
         else :
             status.data = 0
+        print(traj_pred)
         self.status_pub_.publish(status)
         nn_path = Path()
         nn_path.header.frame_id = 'map'
@@ -755,9 +834,11 @@ class CarNode(Node):
         
         if SIM == 'numerical':
             obs, reward, done, info = env.step(action)
-        else :
+        elif SIM == 'vicon' :
             obs = np.array(vicon_loc)
             self.vicon_loc = np.array(vicon_loc)
+            client_socket.sendto(struct.pack('dd',vx*0.13+action[0]*0.13,action[1]),(client_ip,client_port))
+            
         w_pred_ = 0.
         _w_pred = 0.
         if len(self.states) > stats['buffer']  :

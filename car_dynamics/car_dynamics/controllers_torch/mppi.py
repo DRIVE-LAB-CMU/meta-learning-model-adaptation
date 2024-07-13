@@ -312,4 +312,5 @@ class MPPIController(BaseController):
         u = u.cpu()
         t2 = time.time()
         # print("u to cpu", t2 - t1)
+        # print(optim_traj)
         return u, info_dict
