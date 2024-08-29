@@ -24,22 +24,11 @@ def counter_oval(theta):
 def custom_fn(theta, traj):
     while theta >= traj[-1, 0]:
         theta -= traj[-1, 0]
-    # i = 0
-    # j = len(traj) - 1
-    # k = (i + j) // 2
-    # while i < j:
-    #     if theta < traj[k, 0]:
-    #         j = k
-    #     else:
-    #         i = k + 1
-    #     k = (i + j) // 2
-    # i -= 1
     i = np.sum(traj[:,0]<theta) - 1
-    # print("haha")
     ratio = (theta - traj[i, 0]) / (traj[i + 1, 0] - traj[i, 0])
     x, y = traj[i, 1] + ratio * (traj[i + 1, 1] - traj[i, 1]), traj[i, 2] + ratio * (traj[i + 1, 2] - traj[i, 2])
     v = traj[i, 3] + ratio * (traj[i + 1, 3] - traj[i, 3])
-    return jnp.array([x, y]), 0.9*v
+    return jnp.array([x, y]), 0.4*v
     
     
 def counter_square(theta):
@@ -64,7 +53,7 @@ def counter_square(theta):
         y = center[1] + y_radius
 
     return jnp.array([x, y])
-        
+    
 class WaypointGenerator:
     
     def line_point_distance(self, px, py, x1, y1, x2, y2):
@@ -92,6 +81,20 @@ class WaypointGenerator:
 
         return t
 
+    def calc_shifted_traj(self, traj, shift_dist) :
+        # This function calculates the shifted trajectory given the original trajectory and the shift distance.
+        traj_ = np.copy(traj)
+        traj_[:-1] = traj[1:]
+        traj_[-1] = traj[0]
+        _traj = np.copy(traj)
+        _traj[1:] = traj[:-1]
+        _traj[0] = traj[-1]
+        yaws = np.arctan2(traj_[:,1] - _traj[:,1], traj_[:,0] - _traj[:,0])
+        traj_new = np.copy(traj)
+        traj_new[:,0] = traj[:,0] + shift_dist * np.cos(yaws + np.pi/2)
+        traj_new[:,1] = traj[:,1] + shift_dist * np.sin(yaws + np.pi/2)
+        return traj_new
+    
     def __init__(self, waypoint_type: str, dt: float, H: int, speed: float):
         self.waypoint_type = waypoint_type
         
@@ -108,15 +111,35 @@ class WaypointGenerator:
             oy = yaml_content['track_info']['oy']
             self.fn = custom_fn
             df = pd.read_csv('/home/dvij/lecar-car/ref_trajs/' + centerline_file + '_with_speeds.csv')
-            self.path = np.array(df.iloc[:,:]) + np.array([0, ox, oy, 0])
+            df_raceline = pd.read_csv('/home/dvij/lecar-car/ref_trajs/' + centerline_file + '_raceline_with_speeds.csv')
+            self.raceline = np.array(df_raceline.iloc[:,:]) + np.array([0, ox, oy, 0])
             # print(self.path)
+            self.raceline = self.raceline[:,1:]
+            self.raceline[:,:2] *= float(yaml_content['track_info']['scale'])
+            # Check if waypoint_type has a substring 'num' in it to determine
+            if waypoint_type.find('num') != -1:
+                self.path = np.array(df.iloc[:-1,:])*yaml_content['track_info']['scale'] + np.array([0, ox, oy, 0])
+            else :
+                self.path = np.array(df.iloc[:,:]) + np.array([0, ox, oy, 0])
+            self.path[:,-1] = speed
             self.waypoint_type = 'custom'
             self.scale = 6.5*(float(yaml_content['vehicle_params']['Lf']) + float(yaml_content['vehicle_params']['Lr']))
+            # print("hahahaha: ", yaml_content['track_info']['track_width']/2.)
+            self.left_boundary = self.calc_shifted_traj(self.path[:,1:], yaml_content['track_info']['track_width']/2.)
+            self.right_boundary = self.calc_shifted_traj(self.path[:,1:], -yaml_content['track_info']['track_width']/2.)
         else :
             self.fn = custom_fn
             self.scale = 1.
             df = pd.read_csv('/home/dvij/lecar-car/ref_trajs/' + self.waypoint_type + '_with_speeds.csv')
-            self.path = np.array(df.iloc[:,:])
+            # df = pd.read_csv('/home/dvij/lecar-car/ref_trajs/' + self.waypoint_type + '_with_speeds.csv')
+            print(df)
+            print(np.array(df.iloc[:,:]).shape)
+            self.path = np.array(df.iloc[:,[6,1,0,4]])
+            self.path[:,1] -= 2.2
+            self.path[:,2] -= 0.5
+            self.path[:,1] *= 0.7
+            self.path[:,2] *= 0.7
+            self.path[:,0] *= 0.7
             self.waypoint_type = 'custom'
         # else:
         #     raise ValueError(f"Unknown waypoint_type: {waypoint_type}")
@@ -132,6 +155,7 @@ class WaypointGenerator:
         self.waypoint_list_np = np.array(self.waypoint_list)
         self.last_i = -1
         
+    # def calc_lat_error(self, pos, t_closed):
     
     def generate(self, obs: jnp.ndarray, dt=-1, mu_factor=1.) -> jnp.ndarray:
         if dt < 0.:
@@ -188,13 +212,23 @@ class WaypointGenerator:
                 + (self.waypoint_list[t_idx-1,1]-self.waypoint_list[t_idx,1])**2)
             if d1 > 0. : 
                 t1 = self.line_point_distance(pos2d[0], pos2d[1], self.waypoint_list[t_idx-1,0], self.waypoint_list[t_idx-1,1], self.waypoint_list[t_idx,0], self.waypoint_list[t_idx,1])
+                side = jnp.sign((self.waypoint_list[t_idx,0]-self.waypoint_list[t_idx-1,0])*(pos2d[1]-self.waypoint_list[t_idx-1,1]) - (self.waypoint_list[t_idx,1]-self.waypoint_list[t_idx-1,1])*(pos2d[0]-self.waypoint_list[t_idx-1,0]))
+                pt = self.waypoint_list[t_idx-1] + t1 * (self.waypoint_list[t_idx] - self.waypoint_list[t_idx-1])
+                dist1 = np.sqrt((pos2d[0]-pt[0])**2 + (pos2d[1]-pt[1])**2) * side
                 d1 *= min(1.,max(0.,t1)) - 1.
             N = len(self.waypoint_list)
             d2 = np.sqrt((self.waypoint_list[t_idx,0]-self.waypoint_list[(t_idx+1)%N,0])**2 \
                 + (self.waypoint_list[t_idx,1]-self.waypoint_list[(t_idx+1)%N,1])**2)
             if d2 > 0. :
                 t2 = self.line_point_distance(pos2d[0], pos2d[1], self.waypoint_list[t_idx,0], self.waypoint_list[t_idx,1], self.waypoint_list[(t_idx+1)%N,0], self.waypoint_list[(t_idx+1)%N,1])
+                side = jnp.sign((self.waypoint_list[(t_idx+1)%N,0]-self.waypoint_list[t_idx,0])*(pos2d[1]-self.waypoint_list[t_idx,1]) - (self.waypoint_list[(t_idx+1)%N,1]-self.waypoint_list[t_idx,1])*(pos2d[0]-self.waypoint_list[t_idx,0]))
+                pt = self.waypoint_list[t_idx] + t2 * (self.waypoint_list[(t_idx+1)%N] - self.waypoint_list[t_idx])
+                dist2 = np.sqrt((pos2d[0]-pt[0])**2 + (pos2d[1]-pt[1])**2) * side
                 d2 *= min(1.,max(0.,t2))
+            if abs(dist1) < abs(dist2):
+                final_dist = dist1
+            else :
+                final_dist = dist2
             t_closed_refined = t_closed + d1 + d2
             # print("refine time: ", ts-time.time())
             target_pos_list = []
@@ -215,7 +249,7 @@ class WaypointGenerator:
                 # print(speed, speed_ref)
                 target_pos_list.append(jnp.array([pos[0], pos[1], psi, speed]))
             # print("end time: ", time.time()-ts)
-            return jnp.array(target_pos_list), kin_pos
+            return jnp.array(target_pos_list), kin_pos, t_closed_refined, final_dist
         
         
     

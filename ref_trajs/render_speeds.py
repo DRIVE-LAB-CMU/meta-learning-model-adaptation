@@ -5,10 +5,11 @@ import pandas as pd
 
 a_max = 3.0
 a_v = 0.1
-v_max = 30.
+v_max = 5.
 mu = 0.8
 g = 9.81
 mass = 1.
+TRACK_WIDTH = 0.02
 
 def add_columns_to_csv(input_file: str, output_file: str):
     """
@@ -26,8 +27,8 @@ def add_columns_to_csv(input_file: str, output_file: str):
         raise ValueError("The input CSV must have exactly two columns")
     
     # Add new columns with specified names and a constant value
-    df['w_tr_right_m'] = 2.0
-    df['w_tr_left_m'] = 2.0
+    df['w_tr_right_m'] = TRACK_WIDTH
+    df['w_tr_left_m'] = TRACK_WIDTH
     
     # Save the modified DataFrame to a new CSV file
     df.to_csv(output_file, index=False)
@@ -47,7 +48,7 @@ def add_speeds(input_file: str, output_file: str):
     
     
 # Example usage
-input_track = 'berlin_2018-large.csv'
+input_track = 'berlin_2018.csv'
 output_file = '../global_racetrajectory_optimization/inputs/tracks/input.csv'
 
 add_columns_to_csv(input_track, output_file)

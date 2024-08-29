@@ -228,7 +228,10 @@ class MPPIController(BaseController):
         st = time.time()
         # print(torch.mean(total_var),torch.max(total_var),torch.min(total_var))
         # calculate reward
-        reward_rollout = reward_fn(state_list, a_sampled, self.discount) # Tensor
+        if self.delay > 0:
+            reward_rollout = reward_fn(state_list, a_sampled[:,:-self.delay,:], self.discount) # Tensor
+        else :
+            reward_rollout = reward_fn(state_list, a_sampled, self.discount) # Tensor
         cost_rollout = -reward_rollout + self.alpha * total_var/30.
 
         # ind = torch.argmin(cost_rollout)

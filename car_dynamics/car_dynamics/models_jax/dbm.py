@@ -40,7 +40,7 @@ class DynamicParams:
     Bf: float = 60.0
     Br: float = 60.0
     hcom: float = 0.0
-    fr: float = 0.0
+    fr: float = 0.1
     delay: int = 4
     
     def to_dict(self):
@@ -96,7 +96,7 @@ class DynamicBicycleModel:
         ...
 
     
-    @partial(jax.jit, static_argnums=(0,))      
+    # @partial(jax.jit, static_argnums=(0,))      
     def step(self,
              batch_x,
              batch_y,
@@ -400,7 +400,7 @@ class DynamicBicycleModel:
 
 
 
-@jax.jit
+# @jax.jit
 def dbm_dxdt(
     batch_x, 
     batch_y,
@@ -434,6 +434,7 @@ def dbm_dxdt(
     # print("vel omega", prev_vel, batch_omega)
     # print(batch_target_vel.shape, batch_Ta.shape, batch_Tb.shape, prev_vel.shape)
     throttle = batch_target_vel * batch_Ta - batch_target_vel * batch_Tb * prev_vel
+    
     # assert jnp.all(batch_Ta > 0)
     # print(batch_target_vel)
     # print(throttle)

@@ -16,6 +16,7 @@ def reward_track_fn(goal_list: torch.Tensor, defaul_speed: float, sim):
         reward_activate = torch.ones((num_rollouts), device=action.device)
         
         # import pdb; pdb.set_trace()
+        # print("WTDFFFFFFFF")
         for h in range(0,horizon):
             
             state_step = state[h+1]
@@ -32,18 +33,19 @@ def reward_track_fn(goal_list: torch.Tensor, defaul_speed: float, sim):
             # dot_product = (vel_direction * pos_direction).sum(dim=1)
             # cos_angle = dot_product / (torch.norm(pos_direction, dim=1) * torch.norm(vel_direction, dim=1) + 1e-7)
             # vel_diff = torch.norm(state_step[:, 3:4] - defaul_speed, dim=1)
+            # print(goal_list[h+1, 3])
             vel_diff = torch.abs(state_step[:, 3] - goal_list[h+1, 3]) * (state_step[:, 3] > goal_list[h+1, 3])
             vel_diff += torch.abs(state_step[:, 3] - 0.5) * (state_step[:, 3] < 0.5)
             if h < horizon - 1:
                 if sim == 'unity' :
-                    reward = -dist - 3. * vel_diff - 0.0 * torch.norm(action_step[:, 1:2], dim=1) -theta_diff**2 #- 10.*torch.norm(action_step-prev_action_step,dim=1)
+                    reward = -dist - 3. * vel_diff - 0.0 * torch.norm(action_step[:, 1:2], dim=1) - theta_diff**2 #- 10.*torch.norm(action_step-prev_action_step,dim=1)
                 elif sim == 'vicon' :
                     reward = -30.*dist - 3. * vel_diff - 0.0 * torch.norm(action_step[:, 1:2], dim=1) -theta_diff**2 #- 10.*torch.norm(action_step-prev_action_step,dim=1)
                 else :
                     reward = -10.*dist - 3. * vel_diff - 0.0 * torch.norm(action_step[:, 1:2], dim=1) -theta_diff**2 #- 10.*torch.norm(action_step-prev_action_step,dim=1)
             else :
                 if sim == 'unity' :
-                    reward = -dist - 3. * vel_diff - 0.0 * torch.norm(action_step[:, 1:2], dim=1) -theta_diff**2
+                    reward = -dist - 3. * vel_diff - 0.0 * torch.norm(action_step[:, 1:2], dim=1) - theta_diff**2
                 elif sim == 'vicon' :
                     reward = -30.*dist - 3. * vel_diff - 0.0 * torch.norm(action_step[:, 1:2], dim=1) -theta_diff**2
                 else :
@@ -56,7 +58,7 @@ def reward_track_fn(goal_list: torch.Tensor, defaul_speed: float, sim):
 
 #----------------- rollout functions -----------------#
 
-def rollout_fn_select(model_struct, models, dt, L, LR, n_ensembles=3):
+def rollout_fn_select(model_struct, models, dt, L, LR, m_I, n_ensembles=3):
     
     def rollout_fn_nn_heading(obs_history, last_state, action, one_hot_delay=None):
         model = models[0]
@@ -170,6 +172,61 @@ def rollout_fn_select(model_struct, models, dt, L, LR, n_ensembles=3):
         # print(next_state.shape)
         return next_state, {'var': varX}
     
+    def rollout_fn_nn_tires(obs_history, state, action, debug=False, one_hot_delay=None):
+        # import pdb; pdb.set_trace()
+        # print(state.shape)
+        assert state.shape[1] == 6
+        assert action.shape[1] == 2
+        
+        vx = torch.maximum(state[:,3],state[:,3]*0. + 1.)
+        vy = state[:,4]
+        w = state[:,5]
+        steers = action[:,1]*0.34
+        
+        LF = L - LR
+        alpha_f = steers - torch.arctan2(vy+w*LF,vx)
+        alpha_r = torch.arctan2(-vy+w*LR,vx)
+        # print(vx.shape,action.shape)
+        X1 = torch.stack([vx,vx**2,action[:,0]],dim=0).double().T
+        # print(models[0].dtype,X1.dtype)
+        Frx = models[0](X1).detach()[:,0]
+        
+        X2 = alpha_r.unsqueeze(1).double()
+        Fry = models[1](X2).detach()[:,0]
+        
+        X3 = alpha_f.unsqueeze(1).double()
+        Ffy = models[2](X3).detach()[:,0]
+        
+        ones = torch.ones_like(vx)
+        # A = torch.tensor([[ones,0.*ones,-torch.sin(action[:,1])],[0.*ones,ones,torch.cos(action[:,1])],[0.*ones,-m_I*LR*ones,m_I*LF*torch.cos(action[1])]]).double().transpose(2,0,1)
+        A = torch.zeros((state.shape[0],3,3)).to(state.device)
+        A[:,0,0] = ones
+        A[:,1,1] = ones
+        A[:,0,2] = -torch.sin(steers)
+        A[:,1,2] = torch.cos(steers)
+        A[:,2,1] = -m_I*LR*ones
+        A[:,2,2] = m_I*LF*torch.cos(steers)
+        
+        # B = torch.tensor([[vy*w,-vx*w,0.*ones]]).double().transpose(1,0)
+        B = torch.zeros((state.shape[0],3)).to(state.device)
+        B[:,0] = vy*w
+        B[:,1] = -vx*w
+        
+        X = torch.stack([Frx,Fry,Ffy],dim=1).double()
+        y = torch.matmul(A.double(),X.unsqueeze(2)) + B.double().unsqueeze(2)
+        gradX = y[:,:,0]
+        next_state = torch.tensor(state)
+        next_state[:,3] += gradX[:,0] * dt
+        next_state[:,4] += gradX[:,1] * dt
+        next_state[:,5] += gradX[:,2] * dt
+        next_state[:,2] += state[:,5] * dt
+        # next_state = normalize_angle_tensor(next_state,idx=2)
+        next_state[:,0] += state[:,3] * torch.cos(state[:,2]) * dt - state[:,4] * torch.sin(state[:,2]) * dt
+        next_state[:,1] += state[:,3] * torch.sin(state[:,2]) * dt + state[:,4] * torch.cos(state[:,2]) * dt
+        
+        varX = torch.zeros(state.shape[0]).to(state.device)
+        return next_state, {'var': varX}
+    
     def rollout_fn_nn_lstm(obs_history, state, action, h_0s=None, c_0s=None):
         assert state.shape[1] == 6
         assert action.shape[1] == 2
@@ -255,6 +312,8 @@ def rollout_fn_select(model_struct, models, dt, L, LR, n_ensembles=3):
         return rollout_fn_nn_end2end
     elif model_struct == 'nn':
         return rollout_fn_nn
+    elif model_struct == 'nn-tires':
+        return rollout_fn_nn_tires
     elif model_struct == 'nn-lstm':
         return rollout_fn_nn_lstm
     elif model_struct == 'kbm':

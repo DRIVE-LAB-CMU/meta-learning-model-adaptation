@@ -36,9 +36,9 @@ import struct
 import threading
 print("DEVICE", jax.devices())
 
-DT = 0.1
-DT_torch = 0.1
-DELAY = 2
+DT = 0.05
+DT_torch = 0.05
+DELAY = 5
 N_ROLLOUTS = 10000
 H = 8
 SIGMA = 1.0
@@ -70,8 +70,9 @@ def update_vicon():
         # time.sleep(0.005)
 
 trajectory_type = "counter oval"
+# trajectory_type = "track"
 # trajectory_type = "berlin_2018"
-SIM = 'vicon' # 'numerical' or 'unity' or 'vicon'
+SIM = 'numerical' # 'numerical' or 'unity' or 'vicon'
 
 if SIM == 'vicon' :
     learning_rate = 0.0004
@@ -86,7 +87,7 @@ if SIM == 'vicon' :
     
 
 if SIM == 'numerical' :
-    learning_rate = 0.001
+    learning_rate = 0.0004
     LF = 0.16
     LR = 0.15
     L = LF+LR
@@ -101,7 +102,7 @@ if SIM=='unity' :
 if SIM == 'unity' :
     SPEED = 10.0
 else :
-    SPEED = 2.
+    SPEED = 2.2
 
 sigmas = torch.tensor([SIGMA] * 2)
 a_cov_per_step = torch.diag(sigmas**2)
@@ -116,24 +117,34 @@ ART_DELAY = 0
 MAX_DELAY = 7
 new_delay_factor = 0.1
 curr_delay = 0.
-N_ensembles = 1
 append_delay_type = 'OneHot' # 'OneHot' or 'Append'
+FOLDER_NAME = 'data_sim/'
+
+if os.path.exists(FOLDER_NAME) == False:
+    os.makedirs(FOLDER_NAME)
 LAST_LAYER_ADAPTATION = False
+mass = 1.
+I = 1.
 import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--exp_name', default='none', type=str, help='Name of the experiment')
 parser.add_argument('--pre', action='store_true', help='Enable pre-training')
+parser.add_argument('--pre_type', type=str, default="maml", help='pre-training type (maml or avg)')
 parser.add_argument('--lstm', action='store_true', help='Enable lstm')
+parser.add_argument('--n_ensembles', type=int, default=1, help='No of ensembles')
+
 
 args = parser.parse_args()
+
+N_ensembles = args.n_ensembles
 if args.lstm: 
     MODEL = 'nn-lstm' # 'nn' or 'nn-lstm
 else :
     MODEL = 'nn' # 'nn' or 'nn-lstm
 
 # model_params = DynamicParams(num_envs=N_ROLLOUTS, DT=DT,Sa=random.uniform(0.6,0.75), Sb=random.uniform(-0.1,0.1),Ta=random.uniform(5.,45.), Tb=.0, mu=random.uniform(0.35,0.65),delay=1)
-model_params = DynamicParams(num_envs=N_ROLLOUTS, DT=DT,Sa=random.uniform(0.59,0.60), Sb=random.uniform(-0.01,0.01),Ta=random.uniform(10.,15.), Tb=.0, mu=random.uniform(0.45,0.55),delay=1)
+model_params = DynamicParams(num_envs=N_ROLLOUTS, DT=DT,Sa=random.uniform(0.39,0.46), Sb=random.uniform(-0.01,0.01),Ta=random.uniform(10.,15.), Tb=.0, mu=random.uniform(0.45,0.55),delay=1)
 # model_params = DynamicParams(num_envs=N_ROLLOUTS, DT=DT,Sa=0.34, Sb=-0., Ta=20., Tb=.0, mu=0.5)#random.randint(1,5))
 
 if SIM == 'unity' :
@@ -155,9 +166,8 @@ if SIM == 'unity' :
     decay_start = yaml_contents['vehicle_params']['friction_decay_start']
     decay_rate = yaml_contents['vehicle_params']['friction_decay_rate']
 
-
 model_params_single = DynamicParams(num_envs=1, DT=DT,Sa=0.34, Sb=-0., Ta=20., Tb=.0, mu=0.5,delay=DELAY)#random.randint(1,5))
-stats = {'lat_errs': [], 'ws_gt': [], 'ws_': [], 'ws': [], 'losses': [], 'date_time': time.strftime("%m/%d/%Y %H:%M:%S"),'buffer': 100, 'lr': learning_rate, 'online_transition': 300, 'delay': DELAY, 'model': MODEL, 'speed': SPEED, 'total_length': 2000, 'history': HISTORY, 'params': model_params, 'traj': [], 'ref_traj': []}
+stats = {'lat_errs': [], 'ws_gt': [], 'ws_': [], 'ws': [], 'losses': [], 'date_time': time.strftime("%m/%d/%Y %H:%M:%S"),'buffer': 100, 'lr': learning_rate, 'online_transition': 300, 'delay': DELAY, 'model': MODEL, 'speed': SPEED, 'total_length': 1000, 'history': HISTORY, 'params': model_params, 'traj': [], 'ref_traj': []}
 for i in range(N_ensembles):
     stats['losses'+str(i)] = []
     
@@ -268,17 +278,20 @@ print(model.fc)
 
 if args.pre:
     post = ""
+    ext = ".pth"
+    if args.pre_type == 'avg' :
+        ext = "_.pth"
     if 'lstm' in MODEL :
         post = '_lstm'
     for i in range(N_ensembles):
-        print('losses/none'+post+str(i)+'.pth')
-        models[i].load_state_dict(torch.load('losses/none'+post+str(i)+'.pth'))
+        print('losses/none'+post+str(i)+ext)
+        models[i].load_state_dict(torch.load('losses/none'+post+str(i)+ext))
     
     # model_delay.load_state_dict(torch.load('losses/exp1.pth'))
 else :
     print("Didn't load pre-traned model")
 
-rollout_fn_torch = rollout_fn_select_torch(MODEL, models, DT_torch, L, LR)
+rollout_fn_torch = rollout_fn_select_torch(MODEL, models, DT_torch, L, LR, m_I=0.)
 
 def fn():
     return
@@ -354,7 +367,7 @@ frames = []
 
 if SIM == 'numerical' :
     env = OffroadCar({}, dynamics_single)
-    obs = env.reset()
+    obs = env.reset(pose=(-1.,0.,-np.pi/2.))
 elif SIM == 'unity' :
     obs = np.array([yaml_contents['respawn_loc']['z'], yaml_contents['respawn_loc']['x'],0.,0.,0.,0.,])
 elif SIM == 'vicon' :
@@ -459,9 +472,6 @@ def rollout_nn(states,actions,state,one_hot_delay,debug=False) :
     return np.array(traj)
 
 def train_step(states,cmds,augment=True,art_delay=ART_DELAY,one_hot_delay=None,predict_delay=False,print_pred_delay=False) :
-    # print("This is called")
-    # print(len(states),len(cmds))
-    # print(states,cmds)
     global models, stats, model_delay, curr_delay
     if art_delay > 0 :
         states = states[:-art_delay]
@@ -548,46 +558,6 @@ def train_step(states,cmds,augment=True,art_delay=ART_DELAY,one_hot_delay=None,p
     if args.lstm :
         return h_ns, c_ns
     return
-
-# def train_step_tires(states,cmds,augment=True,art_delay=ART_DELAY,one_hot_delay=None,predict_delay=False,print_pred_delay=False) :
-#     global models, stats, model_delay, curr_delay
-#     if art_delay > 0 :
-#         states = states[:-art_delay]
-#         cmds = cmds[art_delay:]
-#     elif art_delay < 0 :
-#         cmds = cmds[:art_delay]
-#         states = states[-art_delay:]
-#     h_ns = []
-#     c_ns = []
-#     for i in range(N_ensembles):
-#         optimizer = optimizers[i]
-#         model = models[i]
-    
-#         vxs = np.array(states)[:,0]
-#         vys = np.array(states)[:,1]
-#         ws = np.array(states)[:,2]
-#         steers = np.array(cmds)[:,0]
-#         throttles = np.array(cmds)[:,1]
-#         alpha_fs = steers - np.arctan2(vys+ws*LF,vxs)
-#         alpha_rs = np.arctan2(-vys+ws*LR,vxs)
-#         m_I = mass/I
-#         A = np.array([[1.,0.,-np.sin(steers)],[0.,1.,np.cos(steers)],[0.,m_I*np.cos(steers)*LF,m_I*LR]])
-#         Y = torch.tensor(Y)
-#         wts = torch.ones_like(Y)
-#         outputs = model(X)           
-#         optimizer.zero_grad()
-#         # Forward pass
-#         # print(outputs.shape,Y.shape,wts.shape)
-#         loss = criterion(wts*outputs, wts*Y/DT)
-#         stats['losses'+str(i)].append(loss.item())
-#         # Backward pass and optimization
-#         loss.backward()
-#         optimizer.step()
-    
-#     if args.lstm :
-#         return h_ns, c_ns
-#     return
-
 
 curr_steer = 0.
 class CarNode(Node):
@@ -726,7 +696,7 @@ class CarNode(Node):
             print("State: ", self.obs_state())
             action, mppi_info = mppi(self.obs_state(),target_pos_tensor, vis_optim_traj=True, model_params=None)
         elif self.i > stats['total_length'] :
-            filename = 'data/'+exp_name + '.pickle'
+            filename = FOLDER_NAME+exp_name + '.pickle'
             with open(filename, 'wb') as file:
                 stats['ref_traj'] = np.array(waypoint_generator.waypoint_list_np)
                 stats['traj'] = np.array(stats['traj'])
@@ -810,12 +780,12 @@ class CarNode(Node):
         actions = np.array(mppi_info['action'])
         # print("Actions: ", actions)
         traj_pred = np.zeros((H+1, 2))
-        actions[:,1] = 1
+        # actions[:,1] = 1
         if len(self.states) > HISTORY :
             traj_pred = rollout_nn(np.array(self.states[-HISTORY:]),np.concatenate((self.cmds[-HISTORY:-1],actions),axis=0),self.obs_state().tolist(),one_hot_delay,debug=True)
         else :
             status.data = 0
-        print(traj_pred)
+        # print(traj_pred)
         self.status_pub_.publish(status)
         nn_path = Path()
         nn_path.header.frame_id = 'map'

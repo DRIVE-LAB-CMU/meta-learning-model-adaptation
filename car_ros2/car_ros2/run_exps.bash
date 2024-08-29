@@ -45,13 +45,68 @@
 # python3 car_node_torch.py --exp_name maml9 --pre
 # python3 car_node_torch.py --exp_name maml10 --pre
 
-python3 car_node_torch.py --exp_name maml1_en1 --pre
-python3 car_node_torch.py --exp_name maml2_en1 --pre
-python3 car_node_torch.py --exp_name maml3_en1 --pre
-python3 car_node_torch.py --exp_name maml4_en1 --pre
-python3 car_node_torch.py --exp_name maml5_en1 --pre
-python3 car_node_torch.py --exp_name maml6_en1 --pre
-python3 car_node_torch.py --exp_name maml7_en1 --pre
-python3 car_node_torch.py --exp_name maml8_en1 --pre
-python3 car_node_torch.py --exp_name maml9_en1 --pre
-python3 car_node_torch.py --exp_name maml10_en1 --pre
+# python3 car_node_torch.py --exp_name maml1_en1 --pre
+# python3 car_node_torch.py --exp_name maml2_en1 --pre
+# python3 car_node_torch.py --exp_name maml3_en1 --pre
+# python3 car_node_torch.py --exp_name maml4_en1 --pre
+# python3 car_node_torch.py --exp_name maml5_en1 --pre
+# python3 car_node_torch.py --exp_name maml6_en1 --pre
+# python3 car_node_torch.py --exp_name maml7_en1 --pre
+# python3 car_node_torch.py --exp_name maml8_en1 --pre
+# python3 car_node_torch.py --exp_name maml9_en1 --pre
+# python3 car_node_torch.py --exp_name maml10_en1 --pre
+
+# python3 car_node_torch_tire.py --exp_name apacrace1_en1 
+# python3 car_node_torch_tire.py --exp_name apacrace2_en1 
+# python3 car_node_torch_tire.py --exp_name apacrace3_en1 
+# python3 car_node_torch_tire.py --exp_name apacrace4_en1 
+# python3 car_node_torch_tire.py --exp_name apacrace5_en1 
+# python3 car_node_torch_tire.py --exp_name apacrace6_en1 
+# python3 car_node_torch_tire.py --exp_name apacrace7_en1 
+# python3 car_node_torch_tire.py --exp_name apacrace8_en1 
+# python3 car_node_torch_tire.py --exp_name apacrace9_en1 
+# python3 car_node_torch_tire.py --exp_name apacrace10_en1 
+
+# python3 car_node_torch.py --exp_name avg1_en1 --pre
+# python3 car_node_torch.py --exp_name avg2_en1 --pre
+# python3 car_node_torch.py --exp_name avg3_en1 --pre
+# python3 car_node_torch.py --exp_name avg4_en1 --pre
+# python3 car_node_torch.py --exp_name avg5_en1 --pre
+# python3 car_node_torch.py --exp_name avg6_en1 --pre
+# python3 car_node_torch.py --exp_name avg7_en1 --pre
+# python3 car_node_torch.py --exp_name avg8_en1 --pre
+# python3 car_node_torch.py --exp_name avg9_en1 --pre
+# python3 car_node_torch.py --exp_name avg10_en1 --pre
+
+# python3 car_node_torch.py --exp_name maml1_en3 --pre --n_ensembles 3
+# python3 car_node_torch.py --exp_name maml2_en3 --pre --n_ensembles 3
+# python3 car_node_torch.py --exp_name maml3_en3 --pre --n_ensembles 3
+# python3 car_node_torch.py --exp_name maml4_en3 --pre --n_ensembles 3
+# python3 car_node_torch.py --exp_name maml5_en3 --pre --n_ensembles 3
+# python3 car_node_torch.py --exp_name maml6_en3 --pre --n_ensembles 3
+# python3 car_node_torch.py --exp_name maml7_en3 --pre --n_ensembles 3
+# python3 car_node_torch.py --exp_name maml8_en3 --pre --n_ensembles 3
+# python3 car_node_torch.py --exp_name maml9_en3 --pre --n_ensembles 3
+# python3 car_node_torch.py --exp_name maml10_en3 --pre --n_ensembles 3
+
+# python3 car_node_torch.py --exp_name maml1_en1 --pre
+# python3 car_node_torch.py --exp_name maml2_en1 --pre
+# python3 car_node_torch.py --exp_name maml3_en1 --pre
+# python3 car_node_torch.py --exp_name maml4_en1 --pre
+# python3 car_node_torch.py --exp_name maml5_en1 --pre
+# python3 car_node_torch.py --exp_name maml6_en1 --pre
+# python3 car_node_torch.py --exp_name maml7_en1 --pre
+# python3 car_node_torch.py --exp_name maml8_en1 --pre
+# python3 car_node_torch.py --exp_name maml9_en1 --pre
+# python3 car_node_torch.py --exp_name maml10_en1 --pre
+
+python3 car_node_torch.py --exp_name avg1_en1 --pre --pre_type avg
+python3 car_node_torch.py --exp_name avg2_en1 --pre --pre_type avg
+python3 car_node_torch.py --exp_name avg3_en1 --pre --pre_type avg
+python3 car_node_torch.py --exp_name avg4_en1 --pre --pre_type avg
+python3 car_node_torch.py --exp_name avg5_en1 --pre --pre_type avg
+python3 car_node_torch.py --exp_name avg6_en1 --pre --pre_type avg
+python3 car_node_torch.py --exp_name avg7_en1 --pre --pre_type avg
+python3 car_node_torch.py --exp_name avg8_en1 --pre --pre_type avg
+python3 car_node_torch.py --exp_name avg9_en1 --pre --pre_type avg
+python3 car_node_torch.py --exp_name avg10_en1 --pre --pre_type avg

@@ -55,12 +55,12 @@ class OffroadCar(gym.Env):
         return np.array([self.state.x, self.state.y, self.state.psi, self.state.vx, self.state.vy, self.state.omega])
     
 
-    def reset(self):
+    def reset(self,pose=(0.,0.,-np.pi/2.)):
         
         self.state = CarState(
-            x=0.,
-            y=1.5,
-            psi=-np.pi/2,
+            x=pose[0],
+            y=pose[1],
+            psi=pose[2],
             vx=0.,
             vy=0.,
             omega=.0,
