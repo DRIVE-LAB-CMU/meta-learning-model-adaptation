@@ -66,7 +66,7 @@ for i in range(n_iters) :
         total_loss += loss.item()
     print("Iteration: ", i, " Loss: ", total_loss)
 
-torch.save(model.state_dict(), 'model.pth')
+torch.save(model.state_dict(), 'model_haha.pth')
     
 
 
