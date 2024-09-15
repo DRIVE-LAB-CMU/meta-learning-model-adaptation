@@ -2,12 +2,18 @@ import numpy as np
 import pickle
 import matplotlib.pyplot as plt
 
+plt.rcParams['legend.fontsize'] = 'xx-large'
+plt.rcParams['axes.titlesize'] = 'xx-large'
+plt.rcParams['axes.labelsize'] = 'xx-large'
+plt.rcParams['xtick.labelsize'] = 'xx-large'
+plt.rcParams['ytick.labelsize'] = 'xx-large'
 
-filename = 'data/kart100.pickle'
+
+filename = 'data/bias100.pickle'
 with open(filename, 'rb') as file:
     data = pickle.load(file)
 
-filename = 'data/circuit_kart.pickle'
+filename = 'data/circuit_bias.pickle'
 with open(filename, 'rb') as file:
     data1 = pickle.load(file)
 
@@ -28,5 +34,5 @@ plt.legend()
 plt.xlabel('x')
 plt.ylabel('y')
 # plt.axis('equal')
-plt.savefig(filename[:-4]+'.png')
+plt.savefig(filename[:-7]+'.png', bbox_inches='tight')
 plt.show()

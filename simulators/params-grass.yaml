@@ -36,6 +36,7 @@ sensors:
 timescale: 1.0
 
 vehicle_params:
+  car_visual_type: 0 # 0: buggy, 1: racecar, 2: mars-rover, 3: go-kart
   m: 250.0
   I: 300.0
   max_steer: 0.34

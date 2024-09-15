@@ -166,8 +166,8 @@ if SIM == 'unity' :
     decay_start = yaml_contents['vehicle_params']['friction_decay_start']
     decay_rate = yaml_contents['vehicle_params']['friction_decay_rate']
 
-model_params_single = DynamicParams(num_envs=1, DT=DT,Sa=0.34, Sb=-0., Ta=20., Tb=.0, mu=0.5,delay=DELAY)#random.randint(1,5))
-stats = {'lat_errs': [], 'ws_gt': [], 'ws_': [], 'ws': [], 'losses': [], 'date_time': time.strftime("%m/%d/%Y %H:%M:%S"),'buffer': 100, 'lr': learning_rate, 'online_transition': 300, 'delay': DELAY, 'model': MODEL, 'speed': SPEED, 'total_length': 1000, 'history': HISTORY, 'params': model_params, 'traj': [], 'ref_traj': []}
+model_params_single = DynamicParams(num_envs=1, DT=DT,Sa=model_params.Sa, Sb=model_params.Sb, Ta=model_params.Ta, Tb=.0, mu=model_params.mu,delay=DELAY)#random.randint(1,5))
+stats = {'lat_errs': [], 'ws_gt': [], 'ws_': [], 'ws': [], 'losses': [], 'date_time': time.strftime("%m/%d/%Y %H:%M:%S"),'buffer': 100, 'lr': learning_rate, 'online_transition': 1000, 'delay': DELAY, 'model': MODEL, 'speed': SPEED, 'total_length': 1000, 'history': HISTORY, 'params': model_params, 'traj': [], 'ref_traj': []}
 for i in range(N_ensembles):
     stats['losses'+str(i)] = []
     

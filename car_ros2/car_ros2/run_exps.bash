@@ -100,13 +100,26 @@
 # python3 car_node_torch.py --exp_name maml9_en1 --pre
 # python3 car_node_torch.py --exp_name maml10_en1 --pre
 
-python3 car_node_torch.py --exp_name avg1_en1 --pre --pre_type avg
-python3 car_node_torch.py --exp_name avg2_en1 --pre --pre_type avg
-python3 car_node_torch.py --exp_name avg3_en1 --pre --pre_type avg
-python3 car_node_torch.py --exp_name avg4_en1 --pre --pre_type avg
-python3 car_node_torch.py --exp_name avg5_en1 --pre --pre_type avg
-python3 car_node_torch.py --exp_name avg6_en1 --pre --pre_type avg
-python3 car_node_torch.py --exp_name avg7_en1 --pre --pre_type avg
-python3 car_node_torch.py --exp_name avg8_en1 --pre --pre_type avg
-python3 car_node_torch.py --exp_name avg9_en1 --pre --pre_type avg
-python3 car_node_torch.py --exp_name avg10_en1 --pre --pre_type avg
+# python3 car_node_torch.py --exp_name avg1_en1 --pre --pre_type avg
+# python3 car_node_torch.py --exp_name avg2_en1 --pre --pre_type avg
+# python3 car_node_torch.py --exp_name avg3_en1 --pre --pre_type avg
+# python3 car_node_torch.py --exp_name avg4_en1 --pre --pre_type avg
+# python3 car_node_torch.py --exp_name avg5_en1 --pre --pre_type avg
+# python3 car_node_torch.py --exp_name avg6_en1 --pre --pre_type avg
+# python3 car_node_torch.py --exp_name avg7_en1 --pre --pre_type avg
+# python3 car_node_torch.py --exp_name avg8_en1 --pre --pre_type avg
+# python3 car_node_torch.py --exp_name avg9_en1 --pre --pre_type avg
+# python3 car_node_torch.py --exp_name avg10_en1 --pre --pre_type avg
+
+python3 car_node_torch.py --exp_name without_with_delay1_en1 
+python3 car_node_torch.py --exp_name without_with_delay2_en1 
+python3 car_node_torch.py --exp_name without_with_delay3_en1 
+python3 car_node_torch.py --exp_name without_with_delay4_en1 
+python3 car_node_torch.py --exp_name without_with_delay5_en1 
+python3 car_node_torch.py --exp_name without_with_delay6_en1 
+python3 car_node_torch.py --exp_name without_with_delay7_en1 
+python3 car_node_torch.py --exp_name without_with_delay8_en1 
+python3 car_node_torch.py --exp_name without_with_delay9_en1 
+python3 car_node_torch.py --exp_name without_with_delay10_en1 
+
+
