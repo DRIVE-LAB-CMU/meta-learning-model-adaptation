@@ -4,13 +4,13 @@ import matplotlib.pyplot as plt
 import os
 import pickle
 
-plt.rcParams['legend.fontsize'] = 'x-large'
-plt.rcParams['axes.titlesize'] = 'xx-large'
-plt.rcParams['axes.labelsize'] = 'xx-large'
-plt.rcParams['xtick.labelsize'] = 'xx-large'
-plt.rcParams['ytick.labelsize'] = 'xx-large'
+plt.rcParams['legend.fontsize'] = 20
+plt.rcParams['axes.titlesize'] = 25
+plt.rcParams['axes.labelsize'] = 25
+plt.rcParams['xtick.labelsize'] = 25
+plt.rcParams['ytick.labelsize'] = 25
 
-exp_name_ = 'random'
+exp_name_ = 'maml'
 t = 10
 n_ensembles = 3
 suffix = '_en1'
@@ -61,7 +61,7 @@ for i in range(1,t+1):
     plt.legend()
     plt.savefig('data_sim/' + exp_name_ + suffix + '/lat_errs'+str(i)+'.png', bbox_inches='tight')
 
-for i in range(1,t+1):
+for i in range(4,6):
     plt.figure()
     exp_name = exp_name_ + str(i)
     filename = 'data_sim/' + exp_name + suffix + '.pickle'
@@ -70,15 +70,15 @@ for i in range(1,t+1):
     
     # print(data)
     times = np.arange(len(data['ws']))*0.05
-    plt.plot(times, data['ws_gt'],label='GT w')
-    plt.plot(times, data['ws_'],label='Predicted w after 5 steps')
-    plt.plot(times, data['ws'],label='Predicted w with -steering after 20 steps')
+    plt.plot(times, data['ws_gt'],label='Ground truth $\omega$')
+    plt.plot(times, data['ws_'],label='Predicted $\omega$ after 5 steps')
+    plt.plot(times, data['ws'],label='Predicted $\omega$ with -steering \n after 20 steps')
     plt.xlabel('Time (in s)')
     plt.ylabel('w (in rad/s)')
     # plt.title("w")
-    plt.plot([data['buffer']*0.05,data['buffer']*0.05], [np.min(data['ws']), np.max(data['ws_'])], label='start training offline', color='red', linestyle='--')
-    plt.plot([data['online_transition']*0.05,data['online_transition']*0.05], [np.min(data['ws']), np.max(data['ws_'])], label='online transition', color='red', linestyle='--')
-    plt.ylim(-2, 5)  # Set y-axis limits
+    # plt.plot([data['buffer']*0.05,data['buffer']*0.05], [np.min(data['ws']), np.max(data['ws_'])], label='start training offline', color='red', linestyle='--')
+    # plt.plot([data['online_transition']*0.05,data['online_transition']*0.05], [np.min(data['ws']), np.max(data['ws_'])], label='online transition', color='red', linestyle='--')
+    plt.ylim(-3, 6.)  # Set y-axis limits
     plt.legend()
-    plt.savefig('data_sim/' + exp_name_ + suffix + '/ws'+str(i)+'.png', bbox_inches='tight')  # Save the figure
+    plt.savefig('data_sim/' + exp_name_ + suffix + '/ws'+str(i)+'.pdf', bbox_inches='tight')  # Save the figure
 
